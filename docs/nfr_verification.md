@@ -39,15 +39,27 @@ permission is not declared in the manifest.
 **Method:** Configure the device's Wi-Fi proxy to a `mitmproxy` instance on the host. Install the mitmproxy CA cert so HTTPS is intercepted. Perform 10 scans, 1 export, 1 import. Inspect the mitmproxy flow window.
 **Pass:** zero outbound requests to non-localhost destinations. Localhost requests from Android system services unrelated to TomatoCare are excluded.
 
+## Known results from training pipeline
+
+| Metric | Value | Source |
+|--------|-------|--------|
+| Test accuracy (Keras) | **95.60%** | `ml/results/eval_report.json` |
+| Test accuracy (TFLite) | **95.88%** | `ml/results/tflite_export_report.json` |
+| Accuracy drop (float16) | **−0.28 pp** (gain) | export report |
+| Model size | **5.75 MB** | export report |
+| Avg CPU inference | **3.2 ms** | TFLite interpreter on x86 |
+
+NFR-03 and NFR-04 (accuracy + model size) are **automatically gated** by `eval_model.py` and `export_tflite.py` — the scripts exit non-zero if either threshold is missed.
+
 ## Sign-off
 
-| NFR    | Verified by | Date       | Pass? |
-|--------|-------------|------------|-------|
-| NFR-01 |             |            |       |
-| NFR-02 |             |            |       |
-| NFR-03 |             |            |       |
-| NFR-04 |             |            |       |
-| NFR-05 |             |            |       |
-| NFR-06 |             |            |       |
-| NFR-07 |             |            |       |
-| NFR-08 |             |            |       |
+| NFR    | Verified by | Date       | Pass? | Notes |
+|--------|-------------|------------|-------|-------|
+| NFR-01 |             |            |       | Run in airplane mode during FR tests |
+| NFR-02 |             |            |       | Measure `inferenceTimeMs` on mid-range device |
+| NFR-03 | Pipeline (A7) | 2026-05-12 | ✓ PASS | 95.60% ≥ 90% threshold |
+| NFR-04 | Pipeline (A8) | 2026-05-12 | ✓ PASS | 5.75 MB ≤ 15 MB; APK size TBD after release build |
+| NFR-05 |             |            |       | Manual tap-count walkthrough |
+| NFR-06 |             |            |       | 50-scan endurance test |
+| NFR-07 |             |            |       | API 26 + API 34 emulator install |
+| NFR-08 |             |            |       | mitmproxy traffic inspection |
