@@ -1,0 +1,57 @@
+{
+  "NFR-01": {
+    "description": "Zero network calls during any operation",
+    "method": "Enable airplane mode and run all FR-01..FR-20 tests; verify no failures",
+    "result": null,
+    "pass": null
+  },
+  "NFR-02": {
+    "description": "Inference completes within 3 seconds",
+    "method": "Stopwatch on Snapdragon 660-class device, average of 10 scans",
+    "measured_seconds": 0.0,
+    "threshold_seconds": 3.0,
+    "pass": null
+  },
+  "NFR-03": {
+    "description": "Model accuracy >= 90% on held-out test set",
+    "method": "Read overall_accuracy from ml/results/eval_report.json",
+    "measured_accuracy": 0.0,
+    "threshold": 0.90,
+    "pass": null
+  },
+  "NFR-04": {
+    "description": "APK size <= 50 MB, .tflite size <= 15 MB",
+    "method": "Build release APK with R8 minify; use Android Studio Analyze APK on app-release.apk",
+    "apk_size_mb": 0.0,
+    "model_size_mb": 0.0,
+    "apk_threshold_mb": 50,
+    "model_threshold_mb": 15,
+    "pass": null
+  },
+  "NFR-05": {
+    "description": "Core features reachable within 2 taps from Home",
+    "method": "Tap count: Scan a leaf (1 tap), History (1 tap), Settings (1 tap), Result from History item (2 taps)",
+    "max_taps": 2,
+    "pass": null
+  },
+  "NFR-06": {
+    "description": "Zero crashes across 50 consecutive scans",
+    "method": "Automated UI test or manual: scan 50 leaf images sequentially without restarting the app",
+    "crashes": 0,
+    "scans_completed": 0,
+    "pass": null
+  },
+  "NFR-07": {
+    "description": "Runs on API 26 AND API 34",
+    "method": "Install release APK on emulators for both API levels; complete FR-04 (full scan flow) on each",
+    "api26_pass": null,
+    "api34_pass": null,
+    "pass": null
+  },
+  "NFR-08": {
+    "description": "Zero outbound data transmission",
+    "method": "Route device traffic through mitmproxy; perform 10 scans, exports, and imports; verify zero HTTP/S requests to non-localhost hosts",
+    "outbound_requests": 0,
+    "pass": null
+  }
+}

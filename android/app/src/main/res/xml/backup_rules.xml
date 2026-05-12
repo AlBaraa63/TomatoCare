@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Exclude scan_history.json from auto-backup — user owns export via SAF. -->
+<full-backup-content>
+    <exclude domain="file" path="scan_history.json" />
+    <exclude domain="file" path="scan_history.tmp" />
+</full-backup-content>
