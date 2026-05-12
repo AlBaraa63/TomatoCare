@@ -1,0 +1,28 @@
+# TomatoCare — ML pipeline pinned dependencies.
+#
+# Target environment: WSL2 + Ubuntu 22.04 + Python 3.10 (system default) +
+# CUDA 12.x via pip-installed nvidia-* wheels (no separate CUDA toolkit
+# install required). Native Windows GPU is unsupported — TF dropped that
+# after 2.10 and we don't carry the carve-out.
+#
+# Why TF 2.15.1 specifically:
+#   - Last TF 2.x release that still defaults to Keras 2 (TF 2.16 switched
+#     to Keras 3, which silently changes the .keras checkpoint format and
+#     breaks our save/load assumptions in train_stage2 → eval → export).
+#   - Supports Python 3.9-3.11 (not 3.12 — use the WSL bootstrap to set
+#     up a Python 3.10 venv).
+#   - tensorflow[and-cuda] bundles CUDA 12.2 + cuDNN 8.9 as wheels.
+#
+# Install via:  ml/scripts/setup_wsl_gpu.sh    (handles venv + CUDA + TF)
+# Do NOT pip install directly on native Windows — you'll get CPU-only.
+tensorflow[and-cuda]==2.15.1 ; sys_platform == "linux"
+tensorflow==2.15.1           ; sys_platform == "win32"
+
+numpy>=1.24,<2.0
+pillow>=10.0
+scikit-learn>=1.3
+matplotlib>=3.7
+seaborn>=0.13
+tqdm>=4.66
+pyyaml>=6.0
+pandas>=2.0

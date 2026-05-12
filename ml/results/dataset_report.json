@@ -1,0 +1,84 @@
+{
+  "mode": "pre_split",
+  "pre_split_root": "/mnt/c/Users/POTATO/Desktop/Code/tomato-care/data/processed",
+  "total_images": 32653,
+  "classes": [
+    "Tomato_Bacterial_spot",
+    "Tomato_Early_blight",
+    "Tomato_healthy",
+    "Tomato_Late_blight",
+    "Tomato_Leaf_Mold",
+    "Tomato_Septoria_leaf_spot",
+    "Tomato_Spider_mites_Two_spotted_spider_mite",
+    "Tomato_Target_Spot",
+    "Tomato_Yellow_Leaf_Curl_Virus",
+    "Tomato_mosaic_virus"
+  ],
+  "class_aliases": {
+    "Bacterial_spot": "Tomato_Bacterial_spot",
+    "Early_blight": "Tomato_Early_blight",
+    "Healthy": "Tomato_healthy",
+    "Late_blight": "Tomato_Late_blight",
+    "Leaf_Mold": "Tomato_Leaf_Mold",
+    "Septoria_leaf_spot": "Tomato_Septoria_leaf_spot",
+    "Spider_mites": "Tomato_Spider_mites_Two_spotted_spider_mite",
+    "Target_Spot": "Tomato_Target_Spot"
+  },
+  "per_class_per_split": {
+    "Tomato_Bacterial_spot": {
+      "train": 2807,
+      "val": 460,
+      "test": 410
+    },
+    "Tomato_Early_blight": {
+      "train": 2460,
+      "val": 375,
+      "test": 353
+    },
+    "Tomato_healthy": {
+      "train": 2992,
+      "val": 492,
+      "test": 427
+    },
+    "Tomato_Late_blight": {
+      "train": 2936,
+      "val": 450,
+      "test": 390
+    },
+    "Tomato_Leaf_Mold": {
+      "train": 2803,
+      "val": 446,
+      "test": 431
+    },
+    "Tomato_Septoria_leaf_spot": {
+      "train": 2841,
+      "val": 465,
+      "test": 420
+    },
+    "Tomato_Spider_mites_Two_spotted_spider_mite": {
+      "train": 1773,
+      "val": 250,
+      "test": 179
+    },
+    "Tomato_Target_Spot": {
+      "train": 1841,
+      "val": 256,
+      "test": 214
+    },
+    "Tomato_Yellow_Leaf_Curl_Virus": {
+      "train": 2235,
+      "val": 347,
+      "test": 302
+    },
+    "Tomato_mosaic_virus": {
+      "train": 2412,
+      "val": 447,
+      "test": 439
+    }
+  },
+  "splits": {
+    "train": 25100,
+    "val": 3988,
+    "test": 3565
+  }
+}

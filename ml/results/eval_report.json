@@ -1,0 +1,202 @@
+{
+  "overall_accuracy": 0.955960729312763,
+  "macro_f1": 0.9577863341178446,
+  "per_class": {
+    "Tomato_Bacterial_spot": {
+      "precision": 0.9376498800959233,
+      "recall": 0.9536585365853658,
+      "f1": 0.9455864570737605,
+      "support": 410
+    },
+    "Tomato_Early_blight": {
+      "precision": 0.9188405797101449,
+      "recall": 0.8980169971671388,
+      "f1": 0.9083094555873925,
+      "support": 353
+    },
+    "Tomato_healthy": {
+      "precision": 0.9737470167064439,
+      "recall": 0.955503512880562,
+      "f1": 0.9645390070921985,
+      "support": 427
+    },
+    "Tomato_Late_blight": {
+      "precision": 0.9573934837092731,
+      "recall": 0.9794871794871794,
+      "f1": 0.9683143219264893,
+      "support": 390
+    },
+    "Tomato_Leaf_Mold": {
+      "precision": 0.9168539325842696,
+      "recall": 0.9466357308584686,
+      "f1": 0.9315068493150684,
+      "support": 431
+    },
+    "Tomato_Septoria_leaf_spot": {
+      "precision": 0.9543269230769231,
+      "recall": 0.9452380952380952,
+      "f1": 0.9497607655502392,
+      "support": 420
+    },
+    "Tomato_Spider_mites_Two_spotted_spider_mite": {
+      "precision": 0.9775280898876404,
+      "recall": 0.9720670391061452,
+      "f1": 0.9747899159663865,
+      "support": 179
+    },
+    "Tomato_Target_Spot": {
+      "precision": 0.9811320754716981,
+      "recall": 0.9719626168224299,
+      "f1": 0.9765258215962441,
+      "support": 214
+    },
+    "Tomato_Yellow_Leaf_Curl_Virus": {
+      "precision": 0.9766666666666667,
+      "recall": 0.9701986754966887,
+      "f1": 0.973421926910299,
+      "support": 302
+    },
+    "Tomato_mosaic_virus": {
+      "precision": 0.9907834101382489,
+      "recall": 0.979498861047836,
+      "f1": 0.9851088201603666,
+      "support": 439
+    }
+  },
+  "confusion_matrix": [
+    [
+      391,
+      5,
+      0,
+      2,
+      5,
+      7,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      4,
+      317,
+      1,
+      7,
+      17,
+      3,
+      0,
+      3,
+      0,
+      1
+    ],
+    [
+      1,
+      6,
+      408,
+      0,
+      7,
+      0,
+      0,
+      0,
+      3,
+      2
+    ],
+    [
+      2,
+      1,
+      1,
+      382,
+      3,
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      3,
+      7,
+      4,
+      4,
+      408,
+      4,
+      0,
+      0,
+      1,
+      0
+    ],
+    [
+      10,
+      8,
+      0,
+      2,
+      2,
+      397,
+      0,
+      0,
+      1,
+      0
+    ],
+    [
+      2,
+      1,
+      0,
+      0,
+      0,
+      1,
+      174,
+      1,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      3,
+      208,
+      0,
+      1
+    ],
+    [
+      2,
+      0,
+      4,
+      1,
+      1,
+      0,
+      1,
+      0,
+      293,
+      0
+    ],
+    [
+      2,
+      0,
+      0,
+      1,
+      1,
+      3,
+      0,
+      0,
+      2,
+      430
+    ]
+  ],
+  "class_names": [
+    "Tomato_Bacterial_spot",
+    "Tomato_Early_blight",
+    "Tomato_healthy",
+    "Tomato_Late_blight",
+    "Tomato_Leaf_Mold",
+    "Tomato_Septoria_leaf_spot",
+    "Tomato_Spider_mites_Two_spotted_spider_mite",
+    "Tomato_Target_Spot",
+    "Tomato_Yellow_Leaf_Curl_Virus",
+    "Tomato_mosaic_virus"
+  ],
+  "test_samples": 3565,
+  "model_checkpoint": "/mnt/c/Users/POTATO/Desktop/TomatoCare/ml/models/checkpoints/stage2_best.keras"
+}

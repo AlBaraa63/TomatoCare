@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Lint rules for TomatoCare.
+
+    HardcodedText is escalated to an error because every user-facing string
+    must live in res/values/strings.xml so the Arabic translation in
+    res/values-ar/strings.xml stays in sync. A hardcoded label in a layout
+    or composable would silently break the bilingual contract.
+-->
+<lint>
+    <issue id="HardcodedText" severity="error" />
+    <!-- Treatments.json strings are intentionally not in strings.xml -
+         they are runtime content, not UI chrome. -->
+    <issue id="MissingTranslation" severity="warning" />
+</lint>

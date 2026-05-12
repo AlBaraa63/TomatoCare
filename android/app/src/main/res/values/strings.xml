@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TomatoCare</string>
+    <string name="home_tagline">Identify tomato leaf diseases — fully offline.</string>
+    <string name="home_last_scan_title">Last scan</string>
+
+    <!-- Screen titles -->
+    <string name="screen_scan_title">Scan a leaf</string>
+    <string name="screen_result_title">Diagnosis</string>
+    <string name="screen_history_title">Scan history</string>
+    <string name="screen_settings_title">Settings</string>
+
+    <!-- Actions -->
+    <string name="action_scan_leaf">Scan a leaf</string>
+    <string name="action_view_history">View history</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_back">Back</string>
+    <string name="action_capture">Capture</string>
+    <string name="action_pick_from_gallery">Pick from gallery</string>
+    <string name="action_grant_permission">Grant camera permission</string>
+    <string name="action_retake">Retake</string>
+    <string name="action_show_anyway">Show anyway</string>
+    <string name="action_toggle_details">Toggle details</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_export_history">Export scan history</string>
+    <string name="action_import_history">Import scan history</string>
+    <string name="action_delete_all_history">Delete all history</string>
+    <string name="action_confirm_delete">Delete</string>
+    <string name="action_confirm_import">Import (replaces current)</string>
+
+    <!-- Camera errors -->
+    <string name="camera_permission_rationale">TomatoCare needs camera access to scan tomato leaves. The image stays on your device — nothing is uploaded.</string>
+    <string name="error_unsupported_image_format">Only JPEG and PNG images are supported.</string>
+    <string name="error_image_too_large">Image is larger than 10 MB. Pick a smaller photo.</string>
+    <string name="error_image_decode_failed">Could not read the selected image.</string>
+    <string name="error_camera_bind_failed">Could not start the camera.</string>
+    <string name="error_capture_failed">Capture failed. Please try again.</string>
+    <string name="error_scan_not_found">Scan not found.</string>
+
+    <!-- Stress / severity / urgency badges -->
+    <string name="badge_biotic">Biotic (Disease)</string>
+    <string name="badge_abiotic">Abiotic (Environmental)</string>
+    <string name="severity_low">Low</string>
+    <string name="severity_medium">Medium</string>
+    <string name="severity_high">High</string>
+    <string name="severity_critical">Critical</string>
+    <string name="urgency_low">Low</string>
+    <string name="urgency_medium">Medium</string>
+    <string name="urgency_high">High</string>
+    <string name="urgency_critical">Critical</string>
+
+    <!-- Growing methods -->
+    <string name="method_greenhouse">Greenhouse</string>
+    <string name="method_open_field">Open field</string>
+    <string name="method_hydroponic">Hydroponic</string>
+    <string name="method_saline_soil">Saline soil</string>
+
+    <!-- Treatment types -->
+    <string name="treatment_type_chemical">Chemical</string>
+    <string name="treatment_type_cultural">Cultural</string>
+    <string name="treatment_type_biological">Biological</string>
+
+    <!-- Result screen -->
+    <string name="result_select_growing_method">Growing method</string>
+    <string name="result_treatments_title">Recommended treatments</string>
+    <string name="result_no_treatments_for_method">No advice yet for this growing method. Try another option above.</string>
+    <string name="result_other_possibilities">Other possibilities</string>
+
+    <!-- Low confidence -->
+    <string name="low_confidence_title">Low confidence</string>
+    <string name="low_confidence_body">The model is not sure about this image. For best results, fill the frame with a single leaf in clear light.</string>
+
+    <!-- History -->
+    <string name="history_empty">No scans yet. Take your first photo from the home screen.</string>
+
+    <!-- Settings -->
+    <string name="settings_language">Language</string>
+    <string name="settings_default_growing_method">Default growing method</string>
+    <string name="settings_data_management">Data</string>
+    <string name="settings_about_blurb">TomatoCare runs fully offline. No images or scans leave your device.</string>
+    <string name="language_english">English</string>
+    <string name="language_arabic">العربية (Arabic)</string>
+
+    <!-- Dialogs and toasts -->
+    <string name="dialog_delete_all_title">Delete all history?</string>
+    <string name="dialog_delete_all_message">This permanently removes every saved scan. This cannot be undone.</string>
+    <string name="dialog_import_confirm_title">Import history?</string>
+    <string name="dialog_import_confirm_message">Importing replaces your current scan history with the contents of the selected file. Continue?</string>
+    <string name="toast_history_deleted">All history deleted.</string>
+</resources>
