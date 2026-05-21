@@ -1,0 +1,54 @@
+{
+  "_note": "Contract artifact for the TomatoCare v2 three-stage cascade. The RUNTIME source of truth for class order is TomatoClasses.kt; this file documents the same mapping for the Contracts page and must be kept in sync with the exported {stage}.meta.json files and the Kotlin engine. Class order within each stage is alphabetical (Keras image_dataset_from_directory default).",
+  "model_version": "2.0.0",
+  "architecture": "three_stage_cascade",
+  "preprocessing": {
+    "input_shape": [1, 224, 224, 3],
+    "color": "RGB",
+    "crop": "center_crop_to_square",
+    "resize": "bilinear_224",
+    "scale": "divide_by_255",
+    "normalisation": "none"
+  },
+  "stages": [
+    {
+      "stage": 1,
+      "name": "leaf_gate",
+      "asset": "stage1_leaf_float16.tflite",
+      "backbone": "mobilenetv3_small",
+      "classes": ["leaf", "not_leaf"],
+      "pass_class": "leaf",
+      "reject_reason_on_fail": "NOT_A_LEAF"
+    },
+    {
+      "stage": 2,
+      "name": "tomato_gate",
+      "asset": "stage2_tomato_float16.tflite",
+      "backbone": "mobilenetv3_small",
+      "classes": ["other_leaf", "tomato"],
+      "pass_class": "tomato",
+      "reject_reason_on_fail": "NOT_A_TOMATO"
+    },
+    {
+      "stage": 3,
+      "name": "disease_classifier",
+      "asset": "stage3_disease_float16.tflite",
+      "backbone": "mobilenetv3_large",
+      "calibrated": true,
+      "low_confidence_threshold": 0.60,
+      "classes": [
+        "bacterial_spot",
+        "early_blight",
+        "healthy",
+        "late_blight",
+        "leaf_mold",
+        "mosaic_virus",
+        "powdery_mildew",
+        "septoria_leaf_spot",
+        "spider_mites",
+        "target_spot",
+        "yellow_leaf_curl_virus"
+      ]
+    }
+  ]
+}

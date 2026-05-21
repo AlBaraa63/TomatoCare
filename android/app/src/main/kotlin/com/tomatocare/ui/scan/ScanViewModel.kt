@@ -11,6 +11,7 @@ import com.tomatocare.TomatoCareApp
 import com.tomatocare.data.model.DiagnosisResult
 import com.tomatocare.data.model.GrowingMethod
 import com.tomatocare.data.model.InferenceOutput
+import com.tomatocare.data.model.RejectReason
 import com.tomatocare.data.model.ScanRecord
 import com.tomatocare.di.AppContainer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,12 @@ sealed interface ScanUiState {
                              val savedScanId: Int) : ScanUiState
     data class Success(val output: InferenceOutput,
                        val savedScanId: Int) : ScanUiState
+    /**
+     * A cascade gate rejected the image before any diagnosis was made
+     * (not a leaf, or not a tomato leaf). No scan record is saved — the
+     * user is asked to retake. See [RejectReason].
+     */
+    data class Rejected(val reason: RejectReason) : ScanUiState
     data class Error(val message: String) : ScanUiState
 }
 
@@ -51,6 +58,14 @@ class ScanViewModel(
                     growingMethod = method,
                     confidenceThreshold = threshold,
                 )
+
+                // A gate rejected the image (not a leaf / not a tomato leaf):
+                // there is no diagnosis to persist, so skip saving entirely
+                // and route straight to the retake prompt.
+                if (output.isRejected) {
+                    _uiState.value = ScanUiState.Rejected(output.rejectReason)
+                    return@launch
+                }
 
                 val savedPath = ScanImageSaver.save(
                     getApplication<Application>().applicationContext,
@@ -89,7 +104,7 @@ class ScanViewModel(
         imagePath = imagePath,
         timestamp = DateTimeFormatter.ISO_INSTANT.format(Instant.now()),
         growingMethod = method,
-        modelVersion = "1.0.0",
+        modelVersion = "2.0.0",
         results = results,
     )
 
