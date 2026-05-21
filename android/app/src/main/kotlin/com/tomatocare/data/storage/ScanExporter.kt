@@ -5,6 +5,7 @@ import android.net.Uri
 import com.tomatocare.data.model.ScanHistory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -22,6 +23,7 @@ class ScanExporter(
     private val context: Context,
     private val storage: ScanStorageManager,
 ) {
+    @OptIn(ExperimentalSerializationApi::class)
     private val prettyJson = Json {
         prettyPrint = true
         prettyPrintIndent = "  "

@@ -45,27 +45,36 @@ class ImagePreprocessor(
         return buf
     }
 
-    /**
-     * Reapply EXIF rotation if present. CameraX preview frames are usually
-     * correct already, but gallery imports from other apps frequently carry
-     * portrait EXIF tags on landscape pixel data — failing to rotate makes
-     * the leaf appear sideways to the model and tanks accuracy.
-     */
-    fun rotateByExif(bitmap: Bitmap, exifInput: InputStream): Bitmap {
-        val exif = ExifInterface(exifInput)
-        val orientation = exif.getAttributeInt(
-            ExifInterface.TAG_ORIENTATION,
-            ExifInterface.ORIENTATION_NORMAL,
-        )
-        val matrix = android.graphics.Matrix()
-        when (orientation) {
-            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
-            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
-            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
-            else -> return bitmap
+    companion object {
+        /**
+         * Reapply EXIF rotation if present. CameraX preview frames are usually
+         * correct already, but gallery imports from other apps frequently carry
+         * portrait EXIF tags on landscape pixel data — failing to rotate makes
+         * the leaf appear sideways to the model and tanks accuracy.
+         *
+         * Static so `ImageValidation.decodeBitmap` can reach it without
+         * instantiating a preprocessor just to read EXIF.
+         *
+         * On API >= 28 the framework's `ImageDecoder` already applies EXIF
+         * orientation — callers on that path MUST NOT call this, or the
+         * bitmap will be rotated twice.
+         */
+        fun rotateByExif(bitmap: Bitmap, exifInput: InputStream): Bitmap {
+            val exif = ExifInterface(exifInput)
+            val orientation = exif.getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL,
+            )
+            val matrix = android.graphics.Matrix()
+            when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+                else -> return bitmap
+            }
+            return Bitmap.createBitmap(
+                bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true,
+            )
         }
-        return Bitmap.createBitmap(
-            bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true,
-        )
     }
 }

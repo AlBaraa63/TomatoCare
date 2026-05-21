@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -35,13 +36,12 @@ fun LowConfidenceWarning(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.Warning,
                     tint = Color(0xFFE65100),
                     contentDescription = null,
                 )
-                Spacer(Modifier.height(0.dp))
                 Text(
                     text = stringResource(R.string.low_confidence_title),
                     style = MaterialTheme.typography.titleMedium,

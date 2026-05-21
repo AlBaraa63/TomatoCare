@@ -1,13 +1,16 @@
 """A8 — TFLite float16 export.
 
-Converts stage2_best.keras to a float16-quantised .tflite file. Float16
-(not int8) because int8 post-training quantisation on fine-grained
-classification can drop per-class accuracy 2-4% — unacceptable at our
-90% target. Float16 typically drops <0.5% and roughly halves model size.
+Converts stage2_calibrated.keras (preferred) or stage2_best.keras to a
+float16-quantised .tflite. Float16 (not int8) because int8 post-training
+quantisation on fine-grained classification can drop per-class accuracy
+2-4% — unacceptable at our 90% target. Float16 typically drops <0.5% and
+roughly halves model size.
 
 After export, the script:
   1. Verifies file size <= tflite_max_size_mb (15 MB) — exits 1 on failure.
-  2. Reloads the .tflite with the TFLite Interpreter, re-runs the test set,
+  2. Verifies the output shape is [1, num_classes] (catches a class-count
+     mismatch with the Android side at export time, not at runtime).
+  3. Reloads the .tflite with the TFLite Interpreter, re-runs the test set,
      and compares accuracy to the Keras model. Drop > 1% emits a warning
      but does not fail (the original keras eval already gated accuracy).
 """
@@ -63,7 +66,20 @@ def main() -> None:
 
     config = load_config()
     root = project_root()
-    keras_ckpt = root / config["paths"]["checkpoints_dir"] / "stage2_best.keras"
+    ckpt_dir = root / config["paths"]["checkpoints_dir"]
+    calibrated = ckpt_dir / "stage2_calibrated.keras"
+    uncalibrated = ckpt_dir / "stage2_best.keras"
+    if calibrated.exists():
+        keras_ckpt = calibrated
+    elif uncalibrated.exists():
+        print(f"  >> WARN: {calibrated} not found — exporting uncalibrated "
+              f"model from {uncalibrated}.")
+        keras_ckpt = uncalibrated
+    else:
+        raise FileNotFoundError(
+            f"Neither {calibrated} nor {uncalibrated} exists. "
+            "Run train_stage2.py (and calibrate_temperature.py)."
+        )
     tflite_dir = root / config["paths"]["tflite_dir"]
     tflite_dir.mkdir(parents=True, exist_ok=True)
     tflite_path = tflite_dir / "tomatocare_model_float16.tflite"
@@ -71,17 +87,19 @@ def main() -> None:
     export_report = results_dir / "tflite_export_report.json"
     keras_eval = results_dir / "eval_report.json"
 
-    if not keras_ckpt.exists():
-        raise FileNotFoundError(
-            f"{keras_ckpt} not found. Run train_stage2.py first."
-        )
     if not keras_eval.exists():
         raise FileNotFoundError(
             f"{keras_eval} not found. Run eval_model.py first."
         )
 
     banner_phase("Converting to TFLite (float16)")
-    model = tf.keras.models.load_model(keras_ckpt)
+    from utils.layers import get_temperature_scale_layer
+    TemperatureScale = get_temperature_scale_layer()
+    model = tf.keras.models.load_model(
+        keras_ckpt,
+        custom_objects={"TemperatureScale": TemperatureScale},
+        safe_mode=False,
+    )
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
     converter.target_spec.supported_types = [tf.float16]
@@ -93,6 +111,7 @@ def main() -> None:
     banner_step("CV-01", "Converted",
                 seconds=f"{dt:.1f}",
                 size_mb=f"{size_mb:.2f}",
+                source_keras=str(keras_ckpt),
                 path=str(tflite_path))
 
     banner_phase("Size Gate")
@@ -112,6 +131,27 @@ def main() -> None:
     inp = interpreter.get_input_details()[0]
     out = interpreter.get_output_details()[0]
     img_size = config["img_size"]
+
+    # Shape gate — catch a class-count mismatch with the Android side here,
+    # not at runtime in the app. The Android contract is [1, num_classes].
+    expected_output = (1, len(config["classes"]))
+    actual_output = tuple(int(d) for d in out["shape"])
+    expected_input = (1, img_size, img_size, 3)
+    actual_input = tuple(int(d) for d in inp["shape"])
+    if actual_output != expected_output:
+        print(f"[FAIL] TFLite output shape {actual_output} != "
+              f"expected {expected_output}.")
+        print("       The classes list in training_config.yaml must match "
+              "the model's final Dense width. Check class count.")
+        sys.exit(1)
+    if actual_input != expected_input:
+        print(f"[FAIL] TFLite input shape {actual_input} != "
+              f"expected {expected_input}.")
+        print("       Android's ImagePreprocessor builds 224x224x3 float32 "
+              "buffers; any mismatch breaks inference.")
+        sys.exit(1)
+    print(f"  >> PASS: input {actual_input}, output {actual_output} match "
+          "Android contract.")
 
     correct = 0
     inference_times: list[float] = []
@@ -144,6 +184,12 @@ def main() -> None:
               "Inspect class-specific drops before shipping.")
 
     report = {
+        "source_keras_checkpoint": str(keras_ckpt),
+        "calibrated": (keras_ckpt.name == "stage2_calibrated.keras"),
+        "model_version": config.get("model_version", "unknown"),
+        "num_classes": len(config["classes"]),
+        "input_shape": list(actual_input),
+        "output_shape": list(actual_output),
         "keras_accuracy": keras_acc,
         "tflite_accuracy": tflite_acc,
         "accuracy_drop": drop,

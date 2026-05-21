@@ -20,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -79,7 +80,26 @@ fun ResultScreen(
             return@Scaffold
         }
 
-        val primary = record.primary ?: return@Scaffold
+        val primary = record.primary
+        if (primary == null) {
+            // Record exists but has no results — defensive guard against an
+            // import file with a malformed scan. Show the same error UX as
+            // a missing-record state and let the user back out.
+            Column(
+                modifier = Modifier.fillMaxSize().padding(inner).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(stringResource(R.string.error_scan_not_found))
+                TextButton(
+                    onClick = onBack,
+                    modifier = Modifier.padding(top = 16.dp),
+                ) {
+                    Text(stringResource(R.string.action_back))
+                }
+            }
+            return@Scaffold
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -108,7 +128,6 @@ fun ResultScreen(
                     ) {
                         StressBadge(primary.stressType)
                         SeverityChip(primary.severityLevel)
-                        Spacer(Modifier.height(0.dp))
                         Text(
                             text = formatConfidence(primary.confidence),
                             style = MaterialTheme.typography.titleMedium,

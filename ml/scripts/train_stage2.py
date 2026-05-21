@@ -19,8 +19,11 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils.seed import load_config, project_root, set_seed  # noqa: E402
+from train_stage1 import compute_class_weights  # noqa: E402
 
 
 def banner_script(purpose: str, device: str) -> None:
@@ -93,18 +96,31 @@ def main() -> None:
                 path=str(stage1_ckpt))
 
     banner_phase("Building Datasets")
-    train_ds = build_train_dataset(
-        root / config["paths"]["augmented_dir"] / "train", config)
+    augmented_train_dir = root / config["paths"]["augmented_dir"] / "train"
+    train_ds = build_train_dataset(augmented_train_dir, config)
     val_ds = build_split_dataset(
         root / config["paths"]["splits_dir"] / "val.csv", config)
+
+    banner_phase("Computing Class Weights")
+    cw_cfg = config.get("class_weights") or {}
+    class_weight = compute_class_weights(
+        augmented_train_dir, config["classes"],
+        mode=cw_cfg.get("mode", "balanced"),
+        manual=cw_cfg.get("manual_weights"),
+    )
+    for idx, cls in enumerate(config["classes"]):
+        banner_step(f"CW-{idx:02d}", cls,
+                    weight=f"{class_weight[idx]:.3f}")
 
     banner_phase("Unfreezing Top Layers")
     unfreeze_top_layers(model, config["fine_tune_from_layer"])
     # Re-compile with the lower Stage 2 LR — required because optimizer
     # state from Stage 1 is at the higher LR and would overshoot.
+    label_smoothing = float((config.get("loss") or {}).get("label_smoothing", 0.0))
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=config["stage2_lr"]),
-        loss="categorical_crossentropy",
+        loss=tf.keras.losses.CategoricalCrossentropy(
+            label_smoothing=label_smoothing),
         metrics=["accuracy"],
     )
     trainable = sum(
@@ -112,19 +128,25 @@ def main() -> None:
     )
     banner_step("M-02", f"Unfroze last {abs(config['fine_tune_from_layer'])} layers",
                 trainable_params=int(trainable),
-                stage2_lr=config["stage2_lr"])
+                stage2_lr=config["stage2_lr"],
+                label_smoothing=label_smoothing)
 
     banner_phase("Stage 2 Training — Fine-Tune")
+    # Tighter patience than Stage 1 — fine-tuning overfits fast.
+    stage2_patience = int(config.get("stage2_patience",
+                                     config["stage1_patience"]))
     callbacks = [
         tf.keras.callbacks.EarlyStopping(
-            monitor="val_accuracy",
-            patience=config["stage1_patience"],
+            monitor="val_loss",
+            mode="min",
+            patience=stage2_patience,
             restore_best_weights=True,
             verbose=1,
         ),
         tf.keras.callbacks.ModelCheckpoint(
             filepath=str(stage2_ckpt),
-            monitor="val_accuracy",
+            monitor="val_loss",
+            mode="min",
             save_best_only=True,
             verbose=1,
         ),
@@ -150,25 +172,33 @@ def main() -> None:
         validation_data=val_ds,
         epochs=config["stage2_epochs"],
         callbacks=callbacks,
+        class_weight=class_weight,
         verbose=2,
     )
 
     h = {k: [float(x) for x in v] for k, v in history.history.items()}
-    best_val = max(h.get("val_accuracy", [0.0]))
-    best_epoch = int(h.get("val_accuracy", [0.0]).index(best_val) + 1) \
-        if h.get("val_accuracy") else 0
+    val_losses = h.get("val_loss", [])
+    best_idx = int(np.argmin(val_losses)) if val_losses else 0
+    best_val_acc = float(h.get("val_accuracy", [0.0])[best_idx]) \
+        if h.get("val_accuracy") else 0.0
+    best_val_loss = float(val_losses[best_idx]) if val_losses else 0.0
     report = {
-        "best_val_accuracy": float(best_val),
-        "best_epoch": best_epoch,
+        "best_val_loss": best_val_loss,
+        "best_val_accuracy": best_val_acc,
+        "best_epoch": best_idx + 1,
         "total_epochs_run": len(h.get("loss", [])),
         "stage2_lr": float(config["stage2_lr"]),
+        "stage2_patience": stage2_patience,
+        "label_smoothing": label_smoothing,
         "fine_tuned_from_layer": int(config["fine_tune_from_layer"]),
+        "class_weights": {str(k): float(v) for k, v in class_weight.items()},
         "history": h,
     }
     with open(results_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     banner_step("RPT-02", "Stage 2 report saved",
-                best_val_accuracy=f"{best_val*100:.2f}%",
+                best_val_accuracy=f"{best_val_acc*100:.2f}%",
+                best_val_loss=f"{best_val_loss:.4f}",
                 path=str(results_path))
     print(f"  >> Saved to : {stage2_ckpt}")
 

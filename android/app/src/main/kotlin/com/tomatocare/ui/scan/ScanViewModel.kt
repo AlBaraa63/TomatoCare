@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.tomatocare.R
 import com.tomatocare.TomatoCareApp
 import com.tomatocare.data.model.DiagnosisResult
 import com.tomatocare.data.model.GrowingMethod
@@ -70,7 +71,8 @@ class ScanViewModel(
                 }
             } catch (t: Throwable) {
                 _uiState.value = ScanUiState.Error(
-                    t.message ?: "Unexpected error during inference"
+                    t.message ?: getApplication<Application>().getString(
+                        R.string.error_inference_failed)
                 )
             }
         }

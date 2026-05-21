@@ -1,13 +1,19 @@
 """A5 — Stage 1 training: classification head only.
 
-Base model is frozen. Only the GAP + Dropout + Dense(10) head trains.
-This learns to map MobileNetV3's ImageNet features onto our 10 disease
-classes without disturbing the pretrained representations. Stage 2
-(separate script) then fine-tunes the top of the base model with a much
-lower LR.
+Base model is frozen. Only the GAP + Dropout + Dense(num_classes) head
+trains. This learns to map MobileNetV3's ImageNet features onto our 11
+classes (10 tomato disease + Tomato_NotALeaf) without disturbing the
+pretrained representations. Stage 2 (separate script) then fine-tunes
+the top of the base model with a much lower LR.
+
+Class weights ('balanced' mode by default) compensate for the fact that
+the Tomato_NotALeaf class — sourced from imagenette — is ~3x larger than
+each per-tomato class and would otherwise bias the model toward rejecting
+inputs. Label smoothing (default 0.05) gently de-confidences the model
+so the 0.60 threshold on the Android side maps to meaningful probability.
 
 Outputs:
-  - ml/models/checkpoints/stage1_best.keras   (best-val-acc weights)
+  - ml/models/checkpoints/stage1_best.keras   (best-val-loss weights)
   - ml/results/results_stage1.json            (history + best metrics)
 
 Caching: if stage1_best.keras already exists, the script loads it and
@@ -19,6 +25,8 @@ import json
 import sys
 import time
 from pathlib import Path
+
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils.seed import load_config, project_root, set_seed  # noqa: E402
@@ -44,6 +52,41 @@ def banner_step(step_id: str, desc: str, **params) -> None:
     if params:
         print("  " + "  |  ".join(f"{k}: {v}" for k, v in params.items()))
     print("--------------------------------------------------------------")
+
+
+def compute_class_weights(augmented_train_dir: Path,
+                          classes: list[str],
+                          mode: str = "balanced",
+                          manual: dict | None = None) -> dict[int, float]:
+    """Return {class_index: weight} from the actual augmented training set.
+
+    'balanced' mirrors sklearn's compute_class_weight: n_samples / (n_classes * count_c).
+    The augmented folder is the ground truth for what the model will see —
+    counting train.csv would miss the 4x augmentation multiplier.
+    """
+    if mode == "none":
+        return {i: 1.0 for i in range(len(classes))}
+    if mode == "manual":
+        if not manual:
+            raise ValueError("class_weights.mode='manual' but manual_weights missing")
+        return {int(k): float(v) for k, v in manual.items()}
+    # balanced
+    counts: dict[int, int] = {}
+    total = 0
+    for idx, cls in enumerate(classes):
+        cls_dir = augmented_train_dir / cls
+        if cls_dir.exists():
+            n = sum(1 for p in cls_dir.iterdir() if p.is_file())
+        else:
+            n = 0
+        counts[idx] = n
+        total += n
+    n_classes = len(classes)
+    weights: dict[int, float] = {}
+    for idx in range(n_classes):
+        c = max(counts[idx], 1)
+        weights[idx] = total / (n_classes * c)
+    return weights
 
 
 def main() -> None:
@@ -74,20 +117,33 @@ def main() -> None:
         return
 
     banner_phase("Building Datasets")
-    train_ds = build_train_dataset(
-        root / config["paths"]["augmented_dir"] / "train", config)
+    augmented_train_dir = root / config["paths"]["augmented_dir"] / "train"
+    train_ds = build_train_dataset(augmented_train_dir, config)
     val_ds = build_split_dataset(
         root / config["paths"]["splits_dir"] / "val.csv", config)
     banner_step("DS-01", "Datasets built",
                 batch_size=config["batch_size"], img_size=config["img_size"])
 
+    banner_phase("Computing Class Weights")
+    cw_cfg = config.get("class_weights") or {}
+    class_weight = compute_class_weights(
+        augmented_train_dir, config["classes"],
+        mode=cw_cfg.get("mode", "balanced"),
+        manual=cw_cfg.get("manual_weights"),
+    )
+    for idx, cls in enumerate(config["classes"]):
+        banner_step(f"CW-{idx:02d}", cls,
+                    weight=f"{class_weight[idx]:.3f}")
+
     banner_phase("Building Model")
     model = build_model(num_classes=len(config["classes"]),
                         img_size=config["img_size"],
                         dropout_rate=config["dropout_rate"])
+    label_smoothing = float((config.get("loss") or {}).get("label_smoothing", 0.0))
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=config["stage1_lr"]),
-        loss="categorical_crossentropy",
+        loss=tf.keras.losses.CategoricalCrossentropy(
+            label_smoothing=label_smoothing),
         metrics=["accuracy"],
     )
     trainable = sum(
@@ -95,19 +151,25 @@ def main() -> None:
     )
     total = model.count_params()
     banner_step("M-01", "MobileNetV3-Large frozen + Dense head",
-                trainable_params=int(trainable), total_params=int(total))
+                trainable_params=int(trainable), total_params=int(total),
+                num_classes=len(config["classes"]),
+                label_smoothing=label_smoothing)
 
     banner_phase("Stage 1 Training — Head Only")
+    # Monitor val_loss (not val_accuracy): label smoothing + class weights
+    # decorrelate accuracy from loss; loss is the truer convergence signal.
     callbacks = [
         tf.keras.callbacks.EarlyStopping(
-            monitor="val_accuracy",
+            monitor="val_loss",
+            mode="min",
             patience=config["stage1_patience"],
             restore_best_weights=True,
             verbose=1,
         ),
         tf.keras.callbacks.ModelCheckpoint(
             filepath=str(ckpt_path),
-            monitor="val_accuracy",
+            monitor="val_loss",
+            mode="min",
             save_best_only=True,
             verbose=1,
         ),
@@ -134,24 +196,34 @@ def main() -> None:
         validation_data=val_ds,
         epochs=config["stage1_epochs"],
         callbacks=callbacks,
+        class_weight=class_weight,
         verbose=2,
     )
 
     h = {k: [float(x) for x in v] for k, v in history.history.items()}
-    best_val = max(h.get("val_accuracy", [0.0]))
-    best_epoch = int(h.get("val_accuracy", [0.0]).index(best_val) + 1) \
-        if h.get("val_accuracy") else 0
+    val_losses = h.get("val_loss", [])
+    if val_losses:
+        best_idx = int(np.argmin(val_losses))
+    else:
+        best_idx = 0
+    best_val_acc = float(h.get("val_accuracy", [0.0])[best_idx]) \
+        if h.get("val_accuracy") else 0.0
+    best_val_loss = float(val_losses[best_idx]) if val_losses else 0.0
     report = {
-        "best_val_accuracy": float(best_val),
-        "best_epoch": best_epoch,
+        "best_val_loss": best_val_loss,
+        "best_val_accuracy": best_val_acc,
+        "best_epoch": best_idx + 1,
         "total_epochs_run": len(h.get("loss", [])),
         "stage1_lr": float(config["stage1_lr"]),
+        "label_smoothing": label_smoothing,
+        "class_weights": {str(k): float(v) for k, v in class_weight.items()},
         "history": h,
     }
     with open(results_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     banner_step("RPT-01", "Stage 1 report saved",
-                best_val_accuracy=f"{best_val*100:.2f}%",
+                best_val_accuracy=f"{best_val_acc*100:.2f}%",
+                best_val_loss=f"{best_val_loss:.4f}",
                 path=str(results_path))
     print(f"  >> Saved to : {ckpt_path}")
 

@@ -30,7 +30,6 @@ fun TomatoCareNavHost(container: AppContainer) {
         }
         composable(Routes.SCAN) {
             ScanScreen(
-                container = container,
                 onResultReady = { scanId ->
                     navController.navigate(Routes.result(scanId)) {
                         popUpTo(Routes.HOME)

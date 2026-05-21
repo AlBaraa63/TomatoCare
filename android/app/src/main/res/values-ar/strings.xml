@@ -83,4 +83,13 @@
     <string name="dialog_import_confirm_title">استيراد السجل؟</string>
     <string name="dialog_import_confirm_message">سيستبدل الاستيراد سجل فحوصك الحالي بمحتويات الملف المحدد. متابعة؟</string>
     <string name="toast_history_deleted">تم حذف كامل السجل.</string>
+
+    <!-- Snackbar messages -->
+    <string name="snackbar_scan_deleted">تم حذف الفحص</string>
+    <string name="snackbar_undo">تراجع</string>
+    <string name="snackbar_exported_n_scans">تم تصدير %d فحوص</string>
+    <string name="snackbar_imported_n_scans">تم استيراد %d فحوص</string>
+    <string name="snackbar_import_failed">فشل الاستيراد: %s</string>
+    <string name="snackbar_export_failed">فشل التصدير: %s</string>
+    <string name="error_inference_failed">حدث خطأ غير متوقع أثناء التشخيص. يرجى المحاولة مجددًا.</string>
 </resources>
