@@ -7,8 +7,15 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Resizes a camera/gallery bitmap to 224x224, normalises pixels to [0,1],
- * and packs them into a direct float32 ByteBuffer suitable for TFLite.
+ * Centre-crops a camera/gallery bitmap to its largest square, resizes to
+ * 224x224, normalises pixels to [0,1], and packs them into a direct float32
+ * ByteBuffer suitable for TFLite.
+ *
+ * CENTRE-CROP, not squash: training uses crop_to_aspect_ratio=True (see
+ * ml/tree/train.py and predict.py), so the on-device pipeline MUST match
+ * byte-for-byte per Contract 5.1. The previous build used
+ * Bitmap.createScaledBitmap which stretches non-square photos and distorts
+ * leaf shape — a train/serve mismatch that hurt real-world accuracy.
  *
  * Direct ByteBuffer is mandatory — heap-allocated buffers force a copy
  * across the JNI boundary every inference call, costing ~10-20 ms per
@@ -20,10 +27,11 @@ class ImagePreprocessor(
 
     /** Allocates a fresh buffer per call so it's safe to use from coroutines. */
     fun process(bitmap: Bitmap): ByteBuffer {
-        val resized = if (bitmap.width != imgSize || bitmap.height != imgSize) {
-            Bitmap.createScaledBitmap(bitmap, imgSize, imgSize, true)
+        val square = centerCropSquare(bitmap)
+        val resized = if (square.width != imgSize || square.height != imgSize) {
+            Bitmap.createScaledBitmap(square, imgSize, imgSize, true)
         } else {
-            bitmap
+            square
         }
 
         // float32 = 4 bytes, 3 channels (RGB), 224*224 pixels.
@@ -41,8 +49,26 @@ class ImagePreprocessor(
             buf.putFloat(b)
         }
         buf.rewind()
-        if (resized !== bitmap) resized.recycle()
+        // Recycle only intermediates we created — never the caller's bitmap.
+        if (resized !== square && resized !== bitmap) resized.recycle()
+        if (square !== bitmap) square.recycle()
         return buf
+    }
+
+    /**
+     * Crops [bitmap] to the largest centred square. Equivalent to
+     * tf.image.resize_with_crop_or_pad to min(h,w) in the training pipeline
+     * and the PIL centre-crop in predict.py. Returns the original bitmap
+     * untouched when it is already square.
+     */
+    private fun centerCropSquare(bitmap: Bitmap): Bitmap {
+        val w = bitmap.width
+        val h = bitmap.height
+        if (w == h) return bitmap
+        val side = minOf(w, h)
+        val left = (w - side) / 2
+        val top = (h - side) / 2
+        return Bitmap.createBitmap(bitmap, left, top, side, side)
     }
 
     companion object {

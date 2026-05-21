@@ -71,6 +71,12 @@
     <string name="low_confidence_title">Low confidence</string>
     <string name="low_confidence_body">The model is not sure about this image. For best results, fill the frame with a single leaf in clear light.</string>
 
+    <!-- Cascade gate rejections -->
+    <string name="reject_not_leaf_title">No leaf detected</string>
+    <string name="reject_not_leaf_body">This photo doesn\'t look like a plant leaf. Point the camera at a single tomato leaf, filling the frame in clear light, and try again.</string>
+    <string name="reject_not_tomato_title">Not a tomato leaf</string>
+    <string name="reject_not_tomato_body">This looks like a leaf, but not a tomato leaf. TomatoCare only diagnoses tomato plants. Take a photo of a tomato leaf and try again.</string>
+
     <!-- History -->
     <string name="history_empty">No scans yet. Take your first photo from the home screen.</string>
 

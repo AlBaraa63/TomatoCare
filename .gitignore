@@ -42,8 +42,9 @@ android/*.iml
 android/app/*.iml
 android/.cxx/
 
-# Stage 2 model copied into assets is not committed — too large
-android/app/src/main/assets/tomatocare_model_float16.tflite
+# Model weights copied into assets are not committed — too large (CLAUDE.md
+# rule: no trained weights in git). Covers the 3-stage cascade + the old model.
+android/app/src/main/assets/*.tflite
 
 # Document & Report Files (local/personal reference)
 *.docx
