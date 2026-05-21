@@ -60,7 +60,6 @@ fun TreatmentCard(
                     modifier = Modifier.weight(1f),
                 )
                 UrgencyTag(treatment.urgencyLevel)
-                Spacer(Modifier.height(0.dp))
                 Icon(
                     imageVector = if (expanded)
                         Icons.Default.ExpandLess else Icons.Default.ExpandMore,

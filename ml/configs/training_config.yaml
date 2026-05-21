@@ -17,30 +17,67 @@ stage1_patience: 5
 # --- Stage 2: fine-tune top of base model ---
 stage2_epochs: 10
 stage2_lr: 0.0001
-fine_tune_from_layer: -30   # unfreeze the last 30 layers of MobileNetV3-Large
+stage2_patience: 3            # tighter than Stage 1 — fine-tune overfits fast
+fine_tune_from_layer: -30     # unfreeze the last 30 layers of MobileNetV3-Large
 
 # --- Architecture ---
 dropout_rate: 0.4
 
+# --- Loss ---
+# label_smoothing > 0 trades a tiny accuracy hit for much better calibrated
+# softmax probabilities. The 0.60 confidence threshold on the Android side
+# only means something if the probabilities are calibrated.
+loss:
+  label_smoothing: 0.05
+
+# --- Class weights ---
+# The Tomato_NotALeaf class (imagenette negatives, ~13k images) is larger
+# than the per-tomato-class average (~2.5k). Without class weights the loss
+# would skew toward rejecting everything. 'balanced' = n_samples / (n_classes * count_c).
+class_weights:
+  mode: balanced            # one of: balanced | none | manual
+  # manual_weights: { 0: 1.0, 1: 1.0, ... }   # only used when mode=manual
+
 # --- Inference + export gates ---
 confidence_threshold: 0.60
 target_accuracy: 0.90
+notaleaf_min_recall: 0.80    # OOD reject class must catch >=80% of negatives
+max_false_reject_rate: 0.15  # don't wrongly reject more than 15% of real leaves
 tflite_max_size_mb: 15
 apk_max_size_mb: 50
 
-# --- Class list (alphabetical = TF Keras default class_indices order) ---
+# --- Class list (canonical order; new entries APPEND so existing indices stay stable) ---
 # These names MUST match folder names under each dataset_roots entry.
+# Index 10 (Tomato_NotALeaf) is the OOD reject class — see ood: section below.
 classes:
-  - Tomato_Bacterial_spot
-  - Tomato_Early_blight
-  - Tomato_healthy
-  - Tomato_Late_blight
-  - Tomato_Leaf_Mold
-  - Tomato_Septoria_leaf_spot
-  - Tomato_Spider_mites_Two_spotted_spider_mite
-  - Tomato_Target_Spot
-  - Tomato_Yellow_Leaf_Curl_Virus
-  - Tomato_mosaic_virus
+  - Tomato_Bacterial_spot                          # 0
+  - Tomato_Early_blight                            # 1
+  - Tomato_healthy                                 # 2
+  - Tomato_Late_blight                             # 3
+  - Tomato_Leaf_Mold                               # 4
+  - Tomato_Septoria_leaf_spot                      # 5
+  - Tomato_Spider_mites_Two_spotted_spider_mite    # 6
+  - Tomato_Target_Spot                             # 7
+  - Tomato_Yellow_Leaf_Curl_Virus                  # 8
+  - Tomato_mosaic_virus                            # 9
+  - Tomato_NotALeaf                                # 10 (OOD reject)
+
+# --- OOD reject class configuration ---
+# Drives prepare_negatives.py. The negative source is downloaded once, split
+# group-aware on its native sub-categories, and emitted as Tomato_NotALeaf
+# rows that prepare_plantvillage.py appends to train/val/test CSVs.
+ood:
+  class_name: Tomato_NotALeaf
+  # 'imagenette' is the imagenet-subset shipped via tensorflow_datasets:
+  # ~13k photos of 10 everyday object categories (dogs, cars, fish, etc).
+  # Permissively licensed, fast to download (~340 MB at 320px).
+  negative_source: imagenette/320px-v2
+  target_train_count: 8000   # cap so NotALeaf doesn't dominate the loss
+  target_val_count:   1500
+  target_test_count:  1500
+  # ImageNet wnid-style sub-category names. We split GROUP-WISE on this
+  # column so the same scene type can't appear in both train and test.
+  split_strategy: group_aware
 
 # --- Pre-split data source (preferred) ---
 # Points at a folder that ALREADY contains train/val/test subfolders, each
@@ -84,27 +121,62 @@ train_ratio: 0.70
 val_ratio: 0.15
 test_ratio: 0.15
 
-# --- Augmentation (UAE-domain shift simulation) ---
-# Standard flips/rotations are baseline; the brightness/red-shift/blur
-# triplet is what closes the lab→UAE-field domain gap.
+# --- Augmentation ---
+# Two stacks, applied in order, gated per-class:
+#   1. UAE-domain (red_shift, brightness, contrast, blur) — TOMATO classes only.
+#      Synthetic UAE field conditions don't belong on a photo of a dog.
+#   2. Real-world phone-shot (jpeg, motion_blur, gamma, perspective, crop, cutout)
+#      — applied to ALL classes so the model sees realistic phone-photo artifacts
+#      regardless of subject. This was the missing piece behind the "horrible
+#      prototype" problem: PlantVillage backgrounds are uniform; phone photos
+#      aren't.
+# Val/test get a LIGHT version of stack #2 only (no UAE shifts) so eval
+# numbers aren't inflated by clean lab images.
 augmentation:
-  brightness_range: [0.6, 1.4]      # peak solar irradiance bleaches highlights
-  contrast_range: [0.7, 1.3]
-  red_shift_range: [10, 25]         # dust haze adds warm orange cast
-  blur_sigma_range: [0.0, 1.5]      # heat shimmer = soft focus
-  rotation_degrees: 30
-  hflip_prob: 0.5
-  vflip_prob: 0.2
-  zoom_range: 0.20
-  augmentations_per_image: 3        # multiplies training set ~4x
+  # --- Stack 1: UAE-domain (tomato classes only) ---
+  uae:
+    brightness_range: [0.6, 1.4]      # peak solar irradiance bleaches highlights
+    contrast_range: [0.7, 1.3]
+    red_shift_range: [10, 25]         # dust haze adds warm orange cast
+    blur_sigma_range: [0.0, 1.5]      # heat shimmer = soft focus
+  # --- Stack 2: real-world phone-shot (all classes) ---
+  realworld:
+    rotation_degrees: 30
+    hflip_prob: 0.5
+    vflip_prob: 0.2
+    zoom_range: 0.20
+    jpeg_quality_range: [30, 80]      # phone-camera JPEG compression artifacts
+    motion_blur_max_kernel: 7         # 0 = off, odd ints = max kernel size
+    gamma_range: [0.7, 1.4]           # exposure / under-over-exposed phone shots
+    gaussian_noise_std_range: [0, 6]  # low-light ISO noise
+    perspective_warp_prob: 0.4
+    perspective_warp_strength: 0.06
+    random_crop_max_off_center: 0.15  # 0..0.15 fraction of size cropped off
+    cutout_prob: 0.3
+    cutout_max_size: 56               # 0.25 * 224
+  augmentations_per_image: 3          # multiplies training set ~4x
+  # Val/test light augmentation (jpeg + mild gamma only — no geometric warps).
+  val_test_light:
+    enabled: true
+    jpeg_quality_range: [50, 90]
+    gamma_range: [0.85, 1.15]
+
+# --- Calibration (post-hoc temperature scaling) ---
+calibration:
+  enabled: true
+  optimizer: lbfgs           # scipy LBFGS — fast for a 1-D problem
+  max_iter: 50
 
 # --- Output paths ---
 paths:
   splits_dir: dataset/splits
   augmented_dir: dataset/augmented
+  raw_negatives_dir: dataset/raw/notaleaf
   results_dir: results
   checkpoints_dir: models/checkpoints
   tflite_dir: models/tflite
 
 # --- Model versioning (embedded into ScanRecord by Android app) ---
-model_version: "1.0.0"
+# Bump this whenever the model's behaviour changes in a way the app must know.
+# 2.0.0: added Tomato_NotALeaf reject class, broader real-world aug, calibration.
+model_version: "2.0.0"

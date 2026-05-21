@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.History
@@ -23,35 +24,33 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tomatocare.R
+import com.tomatocare.data.model.DiagnosisResult
+import com.tomatocare.data.model.ScanRecord
+import com.tomatocare.data.model.SeverityLevel
+import com.tomatocare.data.model.StressType
 import com.tomatocare.di.AppContainer
 import com.tomatocare.ui.components.StressBadge
 import com.tomatocare.ui.format.formatTimestamp
+import com.tomatocare.ui.theme.TomatoCareTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(
-    container: AppContainer,
+fun HomeContent(
+    state: HomeUiState,
     onScanClick: () -> Unit,
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onLastScanClick: (Int) -> Unit,
 ) {
-    val viewModel: HomeViewModel = viewModel(
-        factory = HomeViewModel.factory(container)
-    )
-    val state by viewModel.uiState.collectAsState()
-
-    LaunchedEffect(Unit) { viewModel.refresh() }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -78,9 +77,9 @@ fun HomeScreen(
                 onClick = onScanClick,
             ) {
                 Icon(Icons.Default.CameraAlt, contentDescription = null)
-                Spacer(Modifier.height(0.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "  " + stringResource(R.string.action_scan_leaf),
+                    text = stringResource(R.string.action_scan_leaf),
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
@@ -90,9 +89,9 @@ fun HomeScreen(
                 onClick = onHistoryClick,
             ) {
                 Icon(Icons.Default.History, contentDescription = null)
-                Spacer(Modifier.height(0.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "  " + stringResource(R.string.action_view_history),
+                    text = stringResource(R.string.action_view_history),
                 )
             }
 
@@ -101,9 +100,9 @@ fun HomeScreen(
                 onClick = onSettingsClick,
             ) {
                 Icon(Icons.Default.Settings, contentDescription = null)
-                Spacer(Modifier.height(0.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "  " + stringResource(R.string.action_settings),
+                    text = stringResource(R.string.action_settings),
                 )
             }
 
@@ -141,5 +140,84 @@ fun HomeScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun HomeScreen(
+    container: AppContainer,
+    onScanClick: () -> Unit,
+    onHistoryClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onLastScanClick: (Int) -> Unit,
+) {
+    val viewModel: HomeViewModel = viewModel(
+        factory = HomeViewModel.factory(container)
+    )
+    val state by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(Unit) { viewModel.refresh() }
+
+    HomeContent(
+        state = state,
+        onScanClick = onScanClick,
+        onHistoryClick = onHistoryClick,
+        onSettingsClick = onSettingsClick,
+        onLastScanClick = onLastScanClick
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+fun HomePreview() {
+    TomatoCareTheme {
+        HomeContent(
+            state = HomeUiState(
+                isLoading = false,
+                lastScan = ScanRecord(
+                    scanId = 1,
+                    imagePath = "",
+                    timestamp = "2024-05-13T10:00:00Z",
+                    growingMethod = com.tomatocare.data.model.GrowingMethod.GREENHOUSE,
+                    modelVersion = "1.0.0",
+                    results = listOf(
+                        DiagnosisResult(
+                            resultId = 1,
+                            conditionId = "tomato_early_blight",
+                            conditionNameEn = "Early Blight",
+                            conditionNameAr = "لفحة مبكرة",
+                            confidence = 0.95,
+                            isPrimary = true,
+                            stressType = StressType.BIOTIC,
+                            severityLevel = SeverityLevel.MEDIUM,
+                            treatments = emptyList()
+                        )
+                    )
+                ),
+                totalScans = 1
+            ),
+            onScanClick = {},
+            onHistoryClick = {},
+            onSettingsClick = {},
+            onLastScanClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun HomeEmptyPreview() {
+    TomatoCareTheme {
+        HomeContent(
+            state = HomeUiState(
+                isLoading = false,
+                lastScan = null,
+                totalScans = 0
+            ),
+            onScanClick = {},
+            onHistoryClick = {},
+            onSettingsClick = {},
+            onLastScanClick = {}
+        )
     }
 }

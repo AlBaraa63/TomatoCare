@@ -1,4 +1,4 @@
-"""A2 — Dataset inventory + stratified split.
+"""A2 — Dataset inventory + stratified split (10 tomato classes).
 
 Two operating modes, selected automatically based on training_config.yaml:
 
@@ -15,9 +15,13 @@ Two operating modes, selected automatically based on training_config.yaml:
     Walks every dataset_root, merges per-class lists, and performs a
     70/15/15 stratified split with random_state=42.
 
-In both modes, the script verifies all 10 required classes are present in
-the relevant splits and fails fast otherwise. Caching: re-running with all
-three CSVs and the dataset_report present skips work entirely.
+In both modes, the script verifies all required *tomato* classes (indices
+0..9) are present and fails fast otherwise. The Tomato_NotALeaf class is
+NOT inventoried here — it's prepared separately by prepare_negatives.py
+and merged in at the end of this script.
+
+Caching: re-running with all three CSVs and the dataset_report present
+skips work entirely.
 """
 from __future__ import annotations
 
@@ -166,6 +170,36 @@ def merge_inventories(parts: list[dict[str, list[Path]]],
     return merged
 
 
+def merge_negatives_into_splits(splits_dir: Path, ood_class_name: str,
+                                ood_class_index: int) -> dict[str, int]:
+    """Append Tomato_NotALeaf rows from notaleaf.csv into each split CSV.
+
+    Returns per-split counts of negatives that were merged. Raises if
+    notaleaf.csv is missing — callers should run prepare_negatives.py first.
+    """
+    neg_csv = splits_dir / "notaleaf.csv"
+    if not neg_csv.exists():
+        raise FileNotFoundError(
+            f"{neg_csv} not found. Run prepare_negatives.py first to "
+            "materialise the OOD reject class before splitting tomato data."
+        )
+    neg_df = pd.read_csv(neg_csv)
+    counts: dict[str, int] = {}
+    for split in ("train", "val", "test"):
+        tomato_csv = splits_dir / f"{split}.csv"
+        tomato_df = pd.read_csv(tomato_csv)
+        # Drop any pre-existing Tomato_NotALeaf rows so re-runs are idempotent.
+        tomato_df = tomato_df[tomato_df["label"] != ood_class_name]
+        slice_ = neg_df[neg_df["split"] == split][
+            ["filepath", "label", "class_index"]
+        ].copy()
+        slice_["class_index"] = ood_class_index  # canonical, in case CSV is stale
+        merged = pd.concat([tomato_df, slice_], ignore_index=True)
+        merged.to_csv(tomato_csv, index=False)
+        counts[split] = int(len(slice_))
+    return counts
+
+
 def main() -> None:
     banner_script("A2 Dataset Inventory + Stratified Split")
     set_seed(42)
@@ -201,22 +235,28 @@ def main() -> None:
             aliases = config.get("class_aliases", {}) or {}
             splits = inventory_pre_split(pre_split_root, classes, aliases)
 
-            # Verify every canonical class has at least one image per split.
+            # Tomato classes only — Tomato_NotALeaf is sourced separately from
+            # imagenette via prepare_negatives.py, so we don't expect to find
+            # it inside the pre-split tomato dataset.
+            ood_class = (config.get("ood") or {}).get("class_name")
+            tomato_classes = [c for c in classes if c != ood_class]
+
+            # Verify every tomato class has at least one image per split.
             missing: list[str] = []
             for split_name, rows in splits.items():
                 seen = {r[1] for r in rows}
-                for cls in classes:
+                for cls in tomato_classes:
                     if cls not in seen:
                         missing.append(f"{split_name}/{cls}")
-            for cls in classes:
+            for cls in tomato_classes:
                 idx = classes.index(cls)
                 per_split = {sp: sum(1 for r in splits[sp] if r[1] == cls)
                              for sp in ("train", "val", "test")}
                 banner_step(f"INV-{idx:02d}", cls, **per_split)
             if missing:
                 raise FileNotFoundError(
-                    "Pre-split data missing canonical classes in some splits: "
-                    f"{missing}. Check class_aliases in training_config.yaml."
+                    "Pre-split data missing canonical tomato classes in some "
+                    f"splits: {missing}. Check class_aliases in training_config.yaml."
                 )
 
             for split_name, rows in splits.items():
@@ -226,27 +266,45 @@ def main() -> None:
                      for (p, c, i) in rows]
                 ).to_csv(out, index=False)
             banner_step(
-                "SPL-PRE", "Pre-split CSVs written",
+                "SPL-PRE", "Pre-split tomato CSVs written",
                 train=len(splits["train"]),
                 val=len(splits["val"]),
                 test=len(splits["test"]),
             )
             print(f"  >> Saved to : {splits_dir}")
 
+            # Append OOD reject rows from prepare_negatives.py output.
+            neg_counts: dict[str, int] = {}
+            if ood_class:
+                banner_phase("Merging OOD Reject Class")
+                neg_counts = merge_negatives_into_splits(
+                    splits_dir, ood_class, classes.index(ood_class))
+                banner_step("MRG-NEG", "Tomato_NotALeaf rows appended",
+                            **neg_counts)
+
             report = {
                 "mode": "pre_split",
                 "pre_split_root": str(pre_split_root),
-                "total_images": sum(len(rs) for rs in splits.values()),
+                "total_images": sum(len(rs) for rs in splits.values())
+                                + sum(neg_counts.values()),
                 "classes": classes,
                 "class_aliases": aliases,
+                "ood_class": ood_class,
                 "per_class_per_split": {
                     cls: {
                         sp: sum(1 for r in splits[sp] if r[1] == cls)
                         for sp in ("train", "val", "test")
                     }
-                    for cls in classes
+                    for cls in tomato_classes
+                } | (
+                    {ood_class: {sp: int(neg_counts.get(sp, 0))
+                                 for sp in ("train", "val", "test")}}
+                    if ood_class else {}
+                ),
+                "splits": {
+                    sp: len(rs) + int(neg_counts.get(sp, 0))
+                    for sp, rs in splits.items()
                 },
-                "splits": {sp: len(rs) for sp, rs in splits.items()},
             }
             with open(report_path, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2)
@@ -262,29 +320,33 @@ def main() -> None:
 
     # ----- Mode B: multi-root stratified split (fallback) ----------------
     banner_phase("Dataset Inventory")
+    # Tomato_NotALeaf comes from prepare_negatives.py, not dataset_roots.
+    ood_class = (config.get("ood") or {}).get("class_name")
+    tomato_classes = [c for c in classes if c != ood_class]
     dataset_roots = [root / r for r in config["dataset_roots"]]
-    parts = [inventory_root(r, classes) for r in dataset_roots]
-    merged = merge_inventories(parts, classes)
+    parts = [inventory_root(r, tomato_classes) for r in dataset_roots]
+    merged = merge_inventories(parts, tomato_classes)
 
     missing = [c for c, files in merged.items() if not files]
-    for cls in classes:
+    for cls in tomato_classes:
         n = len(merged[cls])
         banner_step(f"INV-{classes.index(cls):02d}", cls, images=n)
     if missing:
         raise FileNotFoundError(
-            "Required classes have zero images across all dataset roots: "
+            "Required tomato classes have zero images across all dataset roots: "
             f"{missing}. Check that the folder names under your dataset_roots "
             "match the 'classes' list in training_config.yaml exactly."
         )
 
     # Build a flat (filepath, label, class_index) frame.
     rows = []
-    for idx, cls in enumerate(classes):
+    for cls in tomato_classes:
+        idx = classes.index(cls)
         for p in merged[cls]:
             rows.append({"filepath": str(p), "label": cls, "class_index": idx})
     df = pd.DataFrame(rows)
-    print(f"  >> Total images : {len(df)}")
-    print(f"  >> Classes      : {len(classes)}")
+    print(f"  >> Total tomato images : {len(df)}")
+    print(f"  >> Tomato classes      : {len(tomato_classes)}")
 
     banner_phase("Stratified Split")
     tr_ratio = config["train_ratio"]
@@ -305,21 +367,32 @@ def main() -> None:
     train.to_csv(train_csv, index=False)
     val.to_csv(val_csv, index=False)
     test.to_csv(test_csv, index=False)
-    banner_step("SPL-01", "Stratified split written",
+    banner_step("SPL-01", "Stratified tomato split written",
                 train=len(train), val=len(val), test=len(test))
     print(f"  >> Saved to : {splits_dir}")
 
+    # Append OOD reject rows from prepare_negatives.py output.
+    neg_counts: dict[str, int] = {}
+    if ood_class:
+        banner_phase("Merging OOD Reject Class")
+        neg_counts = merge_negatives_into_splits(
+            splits_dir, ood_class, classes.index(ood_class))
+        banner_step("MRG-NEG", "Tomato_NotALeaf rows appended", **neg_counts)
+
     # Report.
     report = {
-        "total_images": int(len(df)),
+        "total_images": int(len(df)) + sum(neg_counts.values()),
         "classes": classes,
+        "ood_class": ood_class,
         "per_class_total": {
-            cls: int((df["label"] == cls).sum()) for cls in classes
-        },
+            cls: int((df["label"] == cls).sum()) for cls in tomato_classes
+        } | (
+            {ood_class: sum(neg_counts.values())} if ood_class else {}
+        ),
         "splits": {
-            "train": int(len(train)),
-            "val": int(len(val)),
-            "test": int(len(test)),
+            "train": int(len(train)) + int(neg_counts.get("train", 0)),
+            "val": int(len(val)) + int(neg_counts.get("val", 0)),
+            "test": int(len(test)) + int(neg_counts.get("test", 0)),
         },
         "split_ratios": {
             "train": tr_ratio, "val": va_ratio, "test": te_ratio

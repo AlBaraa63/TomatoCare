@@ -48,7 +48,7 @@ class ResultViewModel(
                 selectedMethod = method,
                 treatments = treatments,
                 language = settings.language,
-                errorMessage = if (record == null) "Scan not found" else null,
+                errorMessage = null,
             )
         }
     }

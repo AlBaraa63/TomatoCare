@@ -15,6 +15,7 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.google.common.util.concurrent.ListenableFuture
+import com.tomatocare.inference.ImagePreprocessor
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -129,14 +130,23 @@ object ImageValidation {
 
     fun decodeBitmap(context: Context, uri: Uri): Bitmap {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            // ImageDecoder applies EXIF orientation automatically since API 28,
+            // so the bitmap is already upright when it comes back.
             val source = ImageDecoder.createSource(context.contentResolver, uri)
             ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                 decoder.isMutableRequired = true
             }
         } else {
+            // Legacy path: getBitmap does NOT honour EXIF orientation, so a
+            // portrait-EXIF JPG from Photos arrives sideways and tanks the
+            // model. Open a second stream for ExifInterface (the first was
+            // consumed by the decoder) and rotate explicitly.
             @Suppress("DEPRECATION")
-            MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+            val raw = MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+            context.contentResolver.openInputStream(uri)?.use { exifStream ->
+                ImagePreprocessor.rotateByExif(raw, exifStream)
+            } ?: raw
         }
     }
 }

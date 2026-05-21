@@ -26,3 +26,5 @@ seaborn>=0.13
 tqdm>=4.66
 pyyaml>=6.0
 pandas>=2.0
+scipy>=1.10           # LBFGS for temperature-scaling calibration
+tensorflow-datasets>=4.9   # downloads imagenette for the OOD reject class

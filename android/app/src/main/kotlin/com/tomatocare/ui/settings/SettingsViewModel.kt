@@ -3,6 +3,7 @@ package com.tomatocare.ui.settings
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
+import com.tomatocare.R
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.tomatocare.data.model.GrowingMethod
@@ -73,10 +74,13 @@ class SettingsViewModel(
             when (val r = container.scanExporter.export(uri)) {
                 is ExportResult.Success -> _events.emit(
                     SettingsEvent.ExportFinished(true,
-                        "Exported ${r.recordCount} scans")
+                        getApplication<Application>().getString(
+                            R.string.snackbar_exported_n_scans, r.recordCount))
                 )
                 is ExportResult.Failure -> _events.emit(
-                    SettingsEvent.ExportFinished(false, r.message)
+                    SettingsEvent.ExportFinished(false,
+                        getApplication<Application>().getString(
+                            R.string.snackbar_export_failed, r.message))
                 )
             }
         }
@@ -87,10 +91,13 @@ class SettingsViewModel(
             when (val r = container.scanImporter.import(uri)) {
                 is ImportResult.Success -> _events.emit(
                     SettingsEvent.ImportFinished(true,
-                        "Imported ${r.recordCount} scans")
+                        getApplication<Application>().getString(
+                            R.string.snackbar_imported_n_scans, r.recordCount))
                 )
                 is ImportResult.Failure -> _events.emit(
-                    SettingsEvent.ImportFinished(false, r.message)
+                    SettingsEvent.ImportFinished(false,
+                        getApplication<Application>().getString(
+                            R.string.snackbar_import_failed, r.message))
                 )
             }
         }

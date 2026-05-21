@@ -1,0 +1,30 @@
+# Version control
+.git/
+.github/
+
+# Large ML data — mount as volumes at runtime instead
+ml/dataset/raw/
+ml/dataset/augmented/
+ml/models/checkpoints/
+ml/results/
+
+# Python artifacts
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+
+# Android build cache and output (written back via volume mount)
+android/.gradle/
+android/app/build/
+
+# IDE and OS
+.idea/
+**/*.iml
+**/.DS_Store
+**/Thumbs.db
+
+# Docs / reports (not needed in any image)
+docs/
+*.docx
+*.txt

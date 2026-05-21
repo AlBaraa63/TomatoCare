@@ -27,14 +27,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tomatocare.R
 import com.tomatocare.TomatoCareApp
-import com.tomatocare.di.AppContainer
 import com.tomatocare.ui.components.LowConfidenceWarning
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScanScreen(
-    container: AppContainer,
     onResultReady: (Int) -> Unit,
     onBack: () -> Unit,
 ) {

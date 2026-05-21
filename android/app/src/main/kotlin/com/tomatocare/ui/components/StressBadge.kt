@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.dp
 import com.tomatocare.R
 import com.tomatocare.data.model.StressType
 
+import androidx.compose.ui.tooling.preview.Preview
+
 @Composable
 fun StressBadge(stressType: StressType, modifier: Modifier = Modifier) {
     val bg = when (stressType) {
@@ -32,3 +34,20 @@ fun StressBadge(stressType: StressType, modifier: Modifier = Modifier) {
             .padding(horizontal = 12.dp, vertical = 6.dp),
     )
 }
+
+@Preview(showBackground = true)
+@Composable
+fun StressBadgeBioticPreview() {
+    MaterialTheme {
+        StressBadge(StressType.BIOTIC, modifier = Modifier.padding(16.dp))
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun StressBadgeAbioticPreview() {
+    MaterialTheme {
+        StressBadge(StressType.ABIOTIC, modifier = Modifier.padding(16.dp))
+    }
+}
+

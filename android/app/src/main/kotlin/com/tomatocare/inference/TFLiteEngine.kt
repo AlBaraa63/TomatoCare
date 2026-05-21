@@ -64,14 +64,21 @@ class TFLiteEngine(
 
         val probs = output[0]
 
-        // Top-3 results, sorted descending by probability.
-        val ranked = probs.mapIndexed { idx, p -> idx to p }
+        // Full ranked list first, so we can detect the OOD reject class
+        // (Tomato_NotALeaf) before slicing to top-3. If the model's top
+        // pick is NotALeaf the image probably isn't a tomato leaf at all
+        // — we flag low confidence so the UI shows the warning screen,
+        // and we strip NotALeaf out of the diagnosis list either way so
+        // users never see "Tomato_NotALeaf" as a treatable condition.
+        val rankedAll = probs.mapIndexed { idx, p -> idx to p }
             .sortedByDescending { it.second }
+        val isOod = rankedAll.first().first == TomatoClasses.OOD_CLASS_INDEX
+        val ranked = rankedAll
+            .filter { it.first != TomatoClasses.OOD_CLASS_INDEX }
             .take(3)
 
-        val topIdx = ranked.first().first
         val topProb = ranked.first().second
-        val isLowConfidence = topProb < confidenceThreshold
+        val isLowConfidence = isOod || topProb < confidenceThreshold
 
         val results = ranked.mapIndexed { rank, (idx, prob) ->
             val classLabel = CLASS_NAMES[idx]
@@ -153,24 +160,7 @@ class TFLiteEngine(
     }
 
     companion object {
-        const val MODEL_ASSET = "tomatocare_model_float16.tflite"
-
-        /**
-         * Alphabetical (matches TF Keras image_dataset_from_directory's
-         * class_names default with class_names= explicitly set in A4 to
-         * this exact list).
-         */
-        val CLASS_NAMES: List<String> = listOf(
-            "Tomato_Bacterial_spot",
-            "Tomato_Early_blight",
-            "Tomato_healthy",
-            "Tomato_Late_blight",
-            "Tomato_Leaf_Mold",
-            "Tomato_Septoria_leaf_spot",
-            "Tomato_Spider_mites_Two_spotted_spider_mite",
-            "Tomato_Target_Spot",
-            "Tomato_Yellow_Leaf_Curl_Virus",
-            "Tomato_mosaic_virus",
-        )
+        val MODEL_ASSET get() = TomatoClasses.MODEL_ASSET
+        val CLASS_NAMES  get() = TomatoClasses.CLASS_NAMES
     }
 }
