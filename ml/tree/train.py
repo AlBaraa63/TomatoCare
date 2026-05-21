@@ -49,6 +49,7 @@ def make_ds(directory: Path, batch: int, training: bool):
         labels="inferred",
         label_mode="categorical",
         image_size=(IMG, IMG),
+        crop_to_aspect_ratio=True,   # center-crop, never squash (no distortion)
         batch_size=batch,
         shuffle=training,
         seed=SEED,
