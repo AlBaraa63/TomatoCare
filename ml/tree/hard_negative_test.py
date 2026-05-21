@@ -47,6 +47,10 @@ def files_under(d: Path) -> list[str]:
 def _decode(path):
     raw = tf.io.read_file(path)
     img = tf.io.decode_image(raw, channels=3, expand_animations=False)
+    # center-crop to largest square (match crop_to_aspect_ratio), then resize.
+    shape = tf.shape(img)
+    s = tf.minimum(shape[0], shape[1])
+    img = tf.image.resize_with_crop_or_pad(img, s, s)
     img = tf.image.resize(img, [IMG, IMG])
     img = tf.cast(img, tf.float32) / 255.0
     img.set_shape([IMG, IMG, 3])
@@ -74,8 +78,12 @@ def subdirs_with_images(root: Path, exclude: list[str]) -> list[Path]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--species-root", required=True)
-    ap.add_argument("--nonleaf-root", required=True)
+    ap.add_argument("--species-root",
+                    default="/mnt/c/Users/POTATO/Desktop/TomatoCare/ml/dataset/raw/"
+                            "plantvillage_full/plantvillage dataset/color")
+    ap.add_argument("--nonleaf-root",
+                    default="/mnt/c/Users/POTATO/Desktop/TomatoCare/ml/dataset/raw/"
+                            "natural_images/natural_images")
     ap.add_argument("--species-exclude", default="tomato,potato,pepper")
     ap.add_argument("--nonleaf-exclude", default="flower,fruit")
     ap.add_argument("--out", default=str(Path.home() / "tc_data" / "hard_negative_report.json"))

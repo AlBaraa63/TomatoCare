@@ -42,7 +42,8 @@ def eval_dir(model, directory: Path):
     """Return (y_true, y_pred, probs) over a labelled directory, no shuffle."""
     ds = tf.keras.utils.image_dataset_from_directory(
         directory, labels="inferred", label_mode="int",
-        image_size=(IMG, IMG), batch_size=64, shuffle=False)
+        image_size=(IMG, IMG), crop_to_aspect_ratio=True,
+        batch_size=64, shuffle=False)
     class_names = ds.class_names
     ds = ds.map(lambda x, y: (tf.cast(x, tf.float32) / 255.0, y),
                 num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
@@ -55,7 +56,7 @@ def predict_dir(model, directory: Path):
     """Just probs over every image in a directory tree (single implied class)."""
     ds = tf.keras.utils.image_dataset_from_directory(
         directory, labels=None, image_size=(IMG, IMG),
-        batch_size=64, shuffle=False)
+        crop_to_aspect_ratio=True, batch_size=64, shuffle=False)
     ds = ds.map(lambda x: tf.cast(x, tf.float32) / 255.0,
                 num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
     return model.predict(ds, verbose=0)
