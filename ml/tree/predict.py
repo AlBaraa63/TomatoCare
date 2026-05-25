@@ -29,7 +29,7 @@ from PIL import Image
 IMG = 224
 TFLITE = Path.home() / "tc_data" / "tflite"
 MODELS = Path.home() / "tc_data" / "models"
-IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif"}
+IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
 
 
 def interp(name: str) -> tf.lite.Interpreter:
