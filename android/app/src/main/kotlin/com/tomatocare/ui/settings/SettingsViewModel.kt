@@ -11,6 +11,7 @@ import com.tomatocare.data.model.Language
 import com.tomatocare.data.model.UserSettings
 import com.tomatocare.data.storage.ExportResult
 import com.tomatocare.data.storage.ImportResult
+import com.tomatocare.data.storage.TrainingExportResult
 import com.tomatocare.di.AppContainer
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,6 +84,24 @@ class SettingsViewModel(
                             R.string.snackbar_export_failed, r.message))
                 )
             }
+        }
+    }
+
+    fun onExportTrainingDataSelected(uri: Uri) {
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val msg = when (val r = container.trainingDataExporter.export(uri)) {
+                is TrainingExportResult.Success ->
+                    SettingsEvent.ExportFinished(true, app.getString(
+                        R.string.snackbar_exported_training, r.imageCount, r.labelCount))
+                TrainingExportResult.Empty ->
+                    SettingsEvent.ExportFinished(false, app.getString(
+                        R.string.snackbar_export_training_empty))
+                is TrainingExportResult.Failure ->
+                    SettingsEvent.ExportFinished(false, app.getString(
+                        R.string.snackbar_export_failed, r.message))
+            }
+            _events.emit(msg)
         }
     }
 

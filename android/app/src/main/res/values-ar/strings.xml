@@ -29,6 +29,7 @@
     <string name="action_cancel">إلغاء</string>
     <string name="action_export_history">تصدير سجل الفحوص</string>
     <string name="action_import_history">استيراد سجل الفحوص</string>
+    <string name="action_export_training_data">تصدير بيانات التدريب</string>
     <string name="action_delete_all_history">حذف كامل السجل</string>
     <string name="action_confirm_delete">حذف</string>
     <string name="action_confirm_import">استيراد (يستبدل السجل الحالي)</string>
@@ -74,6 +75,24 @@
     <string name="reject_not_tomato_title">ليست ورقة طماطم</string>
     <string name="reject_not_tomato_body">تبدو هذه ورقة نبات، لكنها ليست ورقة طماطم. يشخّص طماطم كير نباتات الطماطم فقط. التقط صورة لورقة طماطم وحاول مرة أخرى.</string>
 
+    <!-- First-launch onboarding -->
+    <string name="onboarding_title">كيفية استخدام طماطم كير</string>
+    <string name="onboarding_step_photo">وجّه الكاميرا نحو ورقة طماطم واحدة واجعلها تملأ الإطار.</string>
+    <string name="onboarding_step_light">استخدم إضاءة جيدة ومتساوية، وتجنّب الوهج الشديد والتشويش.</string>
+    <string name="onboarding_step_tomato">أوراق الطماطم فقط — يُرفض غيرها من النباتات والأشياء.</string>
+    <string name="onboarding_step_offline">يعمل دون اتصال بالإنترنت تمامًا. لا شيء يغادر هاتفك.</string>
+    <string name="onboarding_got_it">حسنًا</string>
+
+    <!-- Diagnosis feedback (data flywheel) -->
+    <string name="feedback_question">هل كان هذا التشخيص صحيحًا؟</string>
+    <string name="feedback_yes">نعم، صحيح</string>
+    <string name="feedback_no">لا، غير صحيح</string>
+    <string name="feedback_pick_correct">ما هي الحالة الصحيحة؟</string>
+    <string name="feedback_select_condition">اختر الحالة الصحيحة</string>
+    <string name="feedback_thanks">شكرًا على ملاحظتك</string>
+    <string name="feedback_marked_correct">لقد أكدت أن هذا التشخيص صحيح.</string>
+    <string name="feedback_corrected_to">لقد صحّحته إلى: %s</string>
+
     <string name="history_empty">لا توجد فحوص بعد. التقط أول صورة من الشاشة الرئيسية.</string>
 
     <string name="settings_language">اللغة</string>
@@ -96,5 +115,8 @@
     <string name="snackbar_imported_n_scans">تم استيراد %d فحوص</string>
     <string name="snackbar_import_failed">فشل الاستيراد: %s</string>
     <string name="snackbar_export_failed">فشل التصدير: %s</string>
+    <string name="snackbar_exported_training">تم تصدير %1$d صورة موسومة عبر %2$d حالة</string>
+    <string name="snackbar_export_training_empty">لا توجد ملاحظات بعد. أكّد صحة بعض التشخيصات أو خطأها أولًا، ثم صدّر.</string>
+    <string name="export_training_data_hint">يجمع الصور التي قدّمت ملاحظات عليها، موسومة حسب الحالة، في ملف ZIP لتحسين النموذج.</string>
     <string name="error_inference_failed">حدث خطأ غير متوقع أثناء التشخيص. يرجى المحاولة مجددًا.</string>
 </resources>
