@@ -6,7 +6,7 @@ import android.graphics.Bitmap
 import com.tomatocare.data.model.DiagnosisResult
 import com.tomatocare.data.model.GrowingMethod
 import com.tomatocare.data.model.InferenceOutput
-import com.tomatocare.data.repository.TreatmentRepository
+import com.tomatocare.data.model.RejectReason
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.tensorflow.lite.Interpreter
@@ -16,40 +16,53 @@ import java.nio.channels.FileChannel
 import kotlin.math.max
 
 /**
- * On-device classifier. Loads the .tflite once at construction; all
- * subsequent calls reuse the same Interpreter.
+ * On-device THREE-STAGE cascade (Capstone 2). Loads three .tflite models
+ * once at construction; every scan runs them in sequence:
  *
- * Class index order MUST match Track A's training (alphabetical by folder
- * name = TF Keras default class_indices). The [CLASS_NAMES] array below is
- * the single source of truth on the Android side — if Track A ever changes
- * the class order, this list changes too. Treatments are looked up via the
- * stable [classLabel] field in ConditionInfo, not via index, so renaming
- * a display name in treatments.json is safe.
+ *   Stage 1  leaf gate    -> reject NOT_A_LEAF   if the image isn't a leaf
+ *   Stage 2  tomato gate  -> reject NOT_A_TOMATO if it's a non-tomato leaf
+ *   Stage 3  disease      -> diagnose 1 of 11 conditions (10 diseases + healthy)
+ *
+ * This replaces the old single-model + OOD-class design. The two binary
+ * gates are what make the app reject "not a tomato leaf" photos instead of
+ * confidently mislabelling them (the v1 failure mode). Each stage uses the
+ * SAME preprocessed input buffer (all three models take float32[1,224,224,3]),
+ * rewound between runs so we preprocess the bitmap only once.
+ *
+ * Stage-3 class indices map 1:1 to ConditionInfo.conditionId in
+ * treatments.json, so conditions are looked up by that key directly.
  */
 class TFLiteEngine(
     context: Context,
     private val preprocessor: ImagePreprocessor,
-    private val treatmentRepository: TreatmentRepository,
+    private val treatmentRepository: com.tomatocare.data.repository.TreatmentRepository,
     private val numThreads: Int = 4,
 ) {
 
-    private val interpreter: Interpreter
+    private val leafGate: Interpreter
+    private val tomatoGate: Interpreter
+    private val diseaseNet: Interpreter
 
     init {
-        val modelBuffer = loadModelFile(context, MODEL_ASSET)
         val opts = Interpreter.Options().apply {
             setNumThreads(numThreads)
             // No NNAPI / GPU delegate: NNAPI on API 26 is unreliable and
-            // float16 CPU comfortably hits the 3 s NFR-02 budget.
+            // float16 CPU comfortably hits the 3 s NFR-02 budget even with
+            // three models — the two gates are MobileNetV3-Small (~1.8 MB).
         }
-        interpreter = Interpreter(modelBuffer, opts)
+        leafGate = Interpreter(loadModelFile(context, TomatoClasses.LEAF_MODEL_ASSET), opts)
+        tomatoGate = Interpreter(loadModelFile(context, TomatoClasses.TOMATO_MODEL_ASSET), opts)
+        diseaseNet = Interpreter(loadModelFile(context, TomatoClasses.DISEASE_MODEL_ASSET), opts)
     }
 
     /**
-     * Run inference on [bitmap], returning the top-3 results sorted by
-     * confidence. If the top class is below [confidenceThreshold], the
-     * result is flagged via [InferenceOutput.isLowConfidence] and the
-     * UI shows the Low Confidence Warning instead of the normal screen.
+     * Run the cascade on [bitmap].
+     *
+     * If a gate rejects, returns immediately with the matching
+     * [RejectReason] and an empty result list. Otherwise returns the top-3
+     * diagnoses sorted by confidence; if the top class is below
+     * [confidenceThreshold] the result is flagged via
+     * [InferenceOutput.isLowConfidence] so the UI shows the warning.
      */
     suspend fun classify(
         bitmap: Bitmap,
@@ -57,32 +70,44 @@ class TFLiteEngine(
         confidenceThreshold: Float = 0.60f,
     ): InferenceOutput = withContext(Dispatchers.IO) {
         val input = preprocessor.process(bitmap)
-        val output = Array(1) { FloatArray(CLASS_NAMES.size) }
         val t0 = System.currentTimeMillis()
-        interpreter.run(input, output)
+
+        // ---- Stage 1: leaf gate ----
+        val leafProbs = runStage(leafGate, input, TomatoClasses.LEAF_CLASS_NAMES.size)
+        if (leafProbs.argmax() != TomatoClasses.LEAF_INDEX) {
+            return@withContext InferenceOutput(
+                results = emptyList(),
+                isLowConfidence = false,
+                inferenceTimeMs = max(System.currentTimeMillis() - t0, 1L),
+                rejectReason = RejectReason.NOT_A_LEAF,
+            )
+        }
+
+        // ---- Stage 2: tomato gate ----
+        val tomatoProbs = runStage(tomatoGate, input, TomatoClasses.TOMATO_CLASS_NAMES.size)
+        if (tomatoProbs.argmax() != TomatoClasses.TOMATO_INDEX) {
+            return@withContext InferenceOutput(
+                results = emptyList(),
+                isLowConfidence = false,
+                inferenceTimeMs = max(System.currentTimeMillis() - t0, 1L),
+                rejectReason = RejectReason.NOT_A_TOMATO,
+            )
+        }
+
+        // ---- Stage 3: disease classifier ----
+        val diseaseProbs = runStage(diseaseNet, input, TomatoClasses.DISEASE_CLASS_NAMES.size)
         val elapsed = System.currentTimeMillis() - t0
 
-        val probs = output[0]
-
-        // Full ranked list first, so we can detect the OOD reject class
-        // (Tomato_NotALeaf) before slicing to top-3. If the model's top
-        // pick is NotALeaf the image probably isn't a tomato leaf at all
-        // — we flag low confidence so the UI shows the warning screen,
-        // and we strip NotALeaf out of the diagnosis list either way so
-        // users never see "Tomato_NotALeaf" as a treatable condition.
-        val rankedAll = probs.mapIndexed { idx, p -> idx to p }
+        val ranked = diseaseProbs.mapIndexed { idx, p -> idx to p }
             .sortedByDescending { it.second }
-        val isOod = rankedAll.first().first == TomatoClasses.OOD_CLASS_INDEX
-        val ranked = rankedAll
-            .filter { it.first != TomatoClasses.OOD_CLASS_INDEX }
             .take(3)
 
         val topProb = ranked.first().second
-        val isLowConfidence = isOod || topProb < confidenceThreshold
+        val isLowConfidence = topProb < confidenceThreshold
 
         val results = ranked.mapIndexed { rank, (idx, prob) ->
-            val classLabel = CLASS_NAMES[idx]
-            val condition = treatmentRepository.getConditionByClassLabel(classLabel)
+            val conditionId = TomatoClasses.DISEASE_CLASS_NAMES[idx]
+            val condition = treatmentRepository.getCondition(conditionId)
             val severity = severityFor(prob, isPrimary = rank == 0,
                                        baseSeverity = condition?.severityDefault)
             val treatments = if (condition != null) {
@@ -91,9 +116,9 @@ class TFLiteEngine(
 
             DiagnosisResult(
                 resultId = rank + 1,
-                conditionId = condition?.conditionId ?: classLabel.lowercase(),
-                conditionNameEn = condition?.nameEn ?: classLabel,
-                conditionNameAr = condition?.nameAr ?: classLabel,
+                conditionId = condition?.conditionId ?: conditionId,
+                conditionNameEn = condition?.nameEn ?: conditionId,
+                conditionNameAr = condition?.nameAr ?: conditionId,
                 confidence = prob.toDouble(),
                 isPrimary = rank == 0,
                 stressType = condition?.stressType
@@ -107,17 +132,41 @@ class TFLiteEngine(
             results = results,
             isLowConfidence = isLowConfidence,
             inferenceTimeMs = max(elapsed, 1L),
+            rejectReason = RejectReason.NONE,
         )
     }
 
     fun close() {
-        interpreter.close()
+        leafGate.close()
+        tomatoGate.close()
+        diseaseNet.close()
+    }
+
+    /**
+     * Runs one stage. The input buffer is shared across all three models, so
+     * rewind it first — TFLite advances the buffer position as it reads.
+     */
+    private fun runStage(
+        interpreter: Interpreter,
+        input: java.nio.ByteBuffer,
+        numClasses: Int,
+    ): FloatArray {
+        input.rewind()
+        val output = Array(1) { FloatArray(numClasses) }
+        interpreter.run(input, output)
+        return output[0]
+    }
+
+    private fun FloatArray.argmax(): Int {
+        var best = 0
+        for (i in 1 until size) if (this[i] > this[best]) best = i
+        return best
     }
 
     private fun loadModelFile(context: Context, assetName: String): MappedByteBuffer {
         // Memory-map the .tflite directly out of the APK. This is why
         // build.gradle.kts sets noCompress += "tflite" — compressed assets
-        // can't be mmapped and would force a 15 MB heap allocation.
+        // can't be mmapped and would force a heap allocation per model.
         val afd: AssetFileDescriptor = context.assets.openFd(assetName)
         FileInputStream(afd.fileDescriptor).use { fis ->
             return fis.channel.map(
@@ -157,10 +206,5 @@ class TFLiteEngine(
         val ordered = com.tomatocare.data.model.SeverityLevel.values()
         val idx = (s.ordinal - steps).coerceAtLeast(0)
         return ordered[idx]
-    }
-
-    companion object {
-        val MODEL_ASSET get() = TomatoClasses.MODEL_ASSET
-        val CLASS_NAMES  get() = TomatoClasses.CLASS_NAMES
     }
 }

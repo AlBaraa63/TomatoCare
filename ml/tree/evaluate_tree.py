@@ -42,7 +42,8 @@ def eval_dir(model, directory: Path):
     """Return (y_true, y_pred, probs) over a labelled directory, no shuffle."""
     ds = tf.keras.utils.image_dataset_from_directory(
         directory, labels="inferred", label_mode="int",
-        image_size=(IMG, IMG), batch_size=64, shuffle=False)
+        image_size=(IMG, IMG), crop_to_aspect_ratio=True,
+        batch_size=64, shuffle=False)
     class_names = ds.class_names
     ds = ds.map(lambda x, y: (tf.cast(x, tf.float32) / 255.0, y),
                 num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
@@ -55,10 +56,42 @@ def predict_dir(model, directory: Path):
     """Just probs over every image in a directory tree (single implied class)."""
     ds = tf.keras.utils.image_dataset_from_directory(
         directory, labels=None, image_size=(IMG, IMG),
-        batch_size=64, shuffle=False)
+        crop_to_aspect_ratio=True, batch_size=64, shuffle=False)
     ds = ds.map(lambda x: tf.cast(x, tf.float32) / 255.0,
                 num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
     return model.predict(ds, verbose=0)
+
+
+def save_confusion_png(cm: np.ndarray, names: list[str], path: Path) -> None:
+    """Row-normalised confusion heatmap for the report. PNG is optional —
+    the matrix is always written to eval_report.json regardless."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception:
+        print("[eval] matplotlib unavailable — confusion matrix is in JSON only")
+        return
+    cmn = cm.astype(float) / np.maximum(cm.sum(1, keepdims=True), 1)
+    fig, ax = plt.subplots(figsize=(9, 8))
+    im = ax.imshow(cmn, cmap="Blues", vmin=0, vmax=1)
+    ax.set_xticks(range(len(names)))
+    ax.set_yticks(range(len(names)))
+    ax.set_xticklabels(names, rotation=45, ha="right", fontsize=7)
+    ax.set_yticklabels(names, fontsize=7)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("True")
+    ax.set_title("Stage 3 disease - row-normalised confusion")
+    for i in range(len(names)):
+        for j in range(len(names)):
+            if cm[i, j]:
+                ax.text(j, i, str(cm[i, j]), ha="center", va="center",
+                        fontsize=6, color="black" if cmn[i, j] < 0.5 else "white")
+    fig.colorbar(im, fraction=0.046, pad=0.04)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"[eval] confusion matrix PNG saved -> {path}")
 
 
 def main() -> None:
@@ -84,6 +117,16 @@ def main() -> None:
     report["stage3_disease"] = {"test_accuracy": round(acc3, 4),
                                 "per_class_recall": per_class,
                                 "n_test": int(len(yt))}
+
+    # Confusion matrix for the disease classes (Dr. Yazeed's suggestion for the
+    # final report's error analysis). Always in JSON; PNG if matplotlib exists.
+    ncls = len(names)
+    cm = np.zeros((ncls, ncls), dtype=int)
+    for t, p in zip(yt, yp):
+        cm[int(t), int(p)] += 1
+    report["stage3_disease"]["confusion_matrix"] = {
+        "labels": names, "matrix": cm.tolist()}
+    save_confusion_png(cm, names, DATA / "confusion_matrix.png")
 
     # ---- 2. Stage 1 leaf gate ----
     yt1, yp1, _, _ = eval_dir(leaf, DATA / "stage1_leaf" / "val")

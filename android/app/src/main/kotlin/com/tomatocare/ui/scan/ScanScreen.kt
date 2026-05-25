@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tomatocare.R
 import com.tomatocare.TomatoCareApp
+import com.tomatocare.ui.components.GateRejectWarning
 import com.tomatocare.ui.components.LowConfidenceWarning
 import kotlinx.coroutines.launch
 
@@ -80,6 +81,11 @@ fun ScanScreen(
                 is ScanUiState.LowConfidence -> LowConfidenceWarning(
                     onRetake = { viewModel.reset() },
                     onProceed = { onResultReady(s.savedScanId) },
+                )
+
+                is ScanUiState.Rejected -> GateRejectWarning(
+                    reason = s.reason,
+                    onRetake = { viewModel.reset() },
                 )
 
                 is ScanUiState.Success -> {
