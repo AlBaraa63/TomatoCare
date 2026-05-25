@@ -42,8 +42,65 @@ STAGES = {
 }
 
 
-def make_ds(directory: Path, batch: int, training: bool):
-    """image_dataset_from_directory -> [0,1] -> (train: augment) -> prefetch."""
+def _motion_blur(x):
+    """Random horizontal/vertical motion blur — simulates a moving phone."""
+    size = 9
+    idx = [[size // 2, j] for j in range(size)]            # middle row
+    horiz = tf.tensor_scatter_nd_update(
+        tf.zeros([size, size]), idx, [1.0 / size] * size)
+    kernel = tf.cond(tf.random.uniform([]) < 0.5,
+                     lambda: tf.transpose(horiz), lambda: horiz)
+    k = tf.tile(kernel[:, :, tf.newaxis, tf.newaxis], [1, 1, 3, 1])
+    return tf.nn.depthwise_conv2d(x[tf.newaxis], k, [1, 1, 1, 1], "SAME")[0]
+
+
+def _jpeg(z):
+    """Random JPEG compression artefacts (phone photos are recompressed)."""
+    u8 = tf.image.convert_image_dtype(
+        tf.clip_by_value(z, 0.0, 1.0), tf.uint8, saturate=True)
+    out = tf.image.random_jpeg_quality(u8, 30, 75)
+    return tf.image.convert_image_dtype(out, tf.float32)
+
+
+def _maybe(x, p, fn):
+    """Apply fn to x with probability p (per image)."""
+    return tf.cond(tf.random.uniform([]) < p, lambda: fn(x), lambda: x)
+
+
+def uae_augment(x, y):
+    """Heavy UAE / mobile augmentation — per image, TRAINING ONLY.
+
+    Simulates the conditions that hurt real-world phone use: harsh desert sun,
+    warm white balance, deep shade, hand motion blur, and JPEG recompression.
+    Kept in the tf.data pipeline (NOT the model graph) so the exported TFLite
+    stays clean. Per Dr. Yazeed's suggestion, the emphasis is on lighting
+    variation and motion blur. Applied probabilistically so many images keep a
+    mild transform and the leaf signal is never destroyed wholesale.
+    """
+    x = tf.image.random_flip_left_right(x)
+    # lighting: harsh sun / deep shade
+    x = tf.image.random_brightness(x, 0.30)
+    x = tf.image.random_contrast(x, 0.55, 1.6)
+    x = _maybe(x, 0.6, lambda z: tf.image.adjust_gamma(
+        tf.clip_by_value(z, 1e-4, 1.0), tf.random.uniform([], 0.6, 1.6)))
+    # colour: warm desert cast / white-balance drift
+    x = tf.image.random_hue(x, 0.06)
+    x = tf.image.random_saturation(x, 0.5, 1.6)
+    # mobile capture artefacts
+    x = _maybe(x, 0.4, _motion_blur)
+    x = _maybe(x, 0.4, _jpeg)
+    return tf.clip_by_value(x, 0.0, 1.0), y
+
+
+def make_ds(directory: Path, batch: int, training: bool, aug: str = "heavy"):
+    """image_dataset_from_directory -> [0,1] -> (train: aug) -> prefetch.
+
+    aug: "heavy"   = full UAE/mobile augmentation (uae_augment).
+         "minimal" = horizontal flip only (colour-preserving). Used by the GAN
+                     fold-in experiment, where heavy colour jitter would mask
+                     the synthetic samples' contribution.
+         "none"    = no augmentation.
+    """
     ds = tf.keras.utils.image_dataset_from_directory(
         directory,
         labels="inferred",
@@ -60,16 +117,14 @@ def make_ds(directory: Path, batch: int, training: bool):
     ds = ds.map(lambda x, y: (tf.cast(x, tf.float32) / 255.0, y),
                 num_parallel_calls=AUTOTUNE)
 
-    if training:
-        # Light on-the-fly augmentation (kept in the data pipeline, NOT the
-        # model, so the exported graph stays clean).
-        def augment(x, y):
-            x = tf.image.random_flip_left_right(x, seed=SEED)
-            x = tf.image.random_brightness(x, 0.15, seed=SEED)
-            x = tf.image.random_contrast(x, 0.85, 1.15, seed=SEED)
-            x = tf.clip_by_value(x, 0.0, 1.0)
-            return x, y
-        ds = ds.map(augment, num_parallel_calls=AUTOTUNE)
+    if training and aug != "none":
+        # Per-image augmentation: unbatch -> augment -> rebatch. (random_* ops
+        # draw one value per CALL, so per-image variation needs per-image map.)
+        fn = uae_augment if aug == "heavy" else \
+            (lambda x, y: (tf.image.random_flip_left_right(x), y))
+        ds = (ds.unbatch()
+                .map(fn, num_parallel_calls=AUTOTUNE)
+                .batch(batch))
 
     return ds.prefetch(AUTOTUNE), class_names
 
@@ -111,6 +166,8 @@ def main() -> None:
     ap.add_argument("--batch", type=int, default=32)
     ap.add_argument("--epochs-head", type=int, default=None)
     ap.add_argument("--epochs-ft", type=int, default=None)
+    ap.add_argument("--aug", default="heavy", choices=["heavy", "minimal", "none"],
+                    help="training augmentation strength (default heavy)")
     args = ap.parse_args()
 
     cfg = STAGES[args.stage]
@@ -123,7 +180,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"==== TRAIN {args.stage} (backbone={cfg['backbone']}) ====")
-    train_ds, class_names = make_ds(stage_dir / "train", args.batch, True)
+    train_ds, class_names = make_ds(stage_dir / "train", args.batch, True, args.aug)
     val_ds, _ = make_ds(stage_dir / "val", args.batch, False)
     num_classes = len(class_names)
     print(f"classes ({num_classes}): {class_names}")
