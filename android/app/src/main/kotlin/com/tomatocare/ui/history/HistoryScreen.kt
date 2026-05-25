@@ -49,7 +49,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tomatocare.R
 import com.tomatocare.data.model.ScanRecord
 import com.tomatocare.di.AppContainer
-import com.tomatocare.ui.components.StressBadge
 import com.tomatocare.ui.format.formatTimestamp
 import com.tomatocare.ui.util.ThumbnailLoader
 
@@ -134,10 +133,6 @@ fun HistoryScreen(
                                 Text(
                                     text = primary.conditionNameEn,
                                     style = MaterialTheme.typography.titleMedium,
-                                )
-                                StressBadge(
-                                    stressType = primary.stressType,
-                                    modifier = Modifier.padding(top = 4.dp),
                                 )
                             }
                             Text(

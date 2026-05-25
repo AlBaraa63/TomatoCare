@@ -3,8 +3,10 @@ package com.tomatocare.ui.result
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.tomatocare.data.model.ConditionInfo
 import com.tomatocare.data.model.GrowingMethod
 import com.tomatocare.data.model.Language
+import com.tomatocare.data.model.ScanFeedback
 import com.tomatocare.data.model.ScanRecord
 import com.tomatocare.data.model.Treatment
 import com.tomatocare.di.AppContainer
@@ -12,6 +14,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 
 data class ResultUiState(
     val isLoading: Boolean = true,
@@ -19,6 +23,7 @@ data class ResultUiState(
     val selectedMethod: GrowingMethod = GrowingMethod.OPEN_FIELD,
     val treatments: List<Treatment> = emptyList(),
     val language: Language = Language.ENGLISH,
+    val conditions: List<ConditionInfo> = emptyList(),
     val errorMessage: String? = null,
 )
 
@@ -48,7 +53,29 @@ class ResultViewModel(
                 selectedMethod = method,
                 treatments = treatments,
                 language = settings.language,
+                conditions = container.treatmentRepository.allConditions()
+                    .sortedBy { it.conditionId },
                 errorMessage = null,
+            )
+        }
+    }
+
+    /**
+     * Record the user's verdict on this diagnosis (data-flywheel). Pass
+     * [correctedConditionId] only when the user marks it wrong and picks the
+     * true condition. Persists to history and refreshes state in place.
+     */
+    fun submitFeedback(wasCorrect: Boolean, correctedConditionId: String? = null) {
+        val record = _uiState.value.record ?: return
+        viewModelScope.launch {
+            val feedback = ScanFeedback(
+                wasCorrect = wasCorrect,
+                correctedConditionId = if (wasCorrect) null else correctedConditionId,
+                timestamp = DateTimeFormatter.ISO_INSTANT.format(Instant.now()),
+            )
+            container.scanStorageManager.setFeedback(record.scanId, feedback)
+            _uiState.value = _uiState.value.copy(
+                record = record.copy(feedback = feedback),
             )
         }
     }

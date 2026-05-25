@@ -77,7 +77,8 @@ def main() -> None:
     if args.stage:
         keras_files = [models_dir / f"{args.stage}.keras"]
     else:
-        keras_files = sorted(models_dir.glob("*.keras"))
+        keras_files = sorted(f for f in models_dir.glob("*.keras")
+                             if "uncalibrated" not in f.stem)
 
     report = {}
     total_mb = 0.0

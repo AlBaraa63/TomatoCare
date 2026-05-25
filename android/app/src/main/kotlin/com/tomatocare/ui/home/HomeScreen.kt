@@ -38,7 +38,7 @@ import com.tomatocare.data.model.ScanRecord
 import com.tomatocare.data.model.SeverityLevel
 import com.tomatocare.data.model.StressType
 import com.tomatocare.di.AppContainer
-import com.tomatocare.ui.components.StressBadge
+import com.tomatocare.ui.components.OnboardingDialog
 import com.tomatocare.ui.format.formatTimestamp
 import com.tomatocare.ui.theme.TomatoCareTheme
 
@@ -128,8 +128,6 @@ fun HomeContent(
                                 text = primary.conditionNameEn,
                                 style = MaterialTheme.typography.titleMedium,
                             )
-                            Spacer(Modifier.height(4.dp))
-                            StressBadge(primary.stressType)
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
@@ -165,6 +163,11 @@ fun HomeScreen(
         onSettingsClick = onSettingsClick,
         onLastScanClick = onLastScanClick
     )
+
+    // First-launch how-to-use dialog; dismissing persists the flag.
+    if (state.showOnboarding) {
+        OnboardingDialog(onDismiss = { viewModel.dismissOnboarding() })
+    }
 }
 
 @Preview(showBackground = true)
