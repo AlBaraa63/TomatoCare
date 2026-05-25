@@ -81,6 +81,26 @@ class ScanStorageManager(private val context: Context) {
             mutex.withLock { writeAtomic(records) }
         }
 
+    /**
+     * Attach (or replace) user feedback on a single scan. Returns false if no
+     * scan with [scanId] exists. Used by the data-flywheel feedback prompt.
+     */
+    suspend fun setFeedback(
+        scanId: Int,
+        feedback: com.tomatocare.data.model.ScanFeedback,
+    ): Boolean = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val current = loadAllInternal()
+            var found = false
+            val updated = current.map {
+                if (it.scanId == scanId) { found = true; it.copy(feedback = feedback) }
+                else it
+            }
+            if (found) writeAtomic(updated)
+            found
+        }
+    }
+
     // --- internals (must be called while holding [mutex]) ---
 
     private fun loadAllInternal(): List<ScanRecord> {

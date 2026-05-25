@@ -32,9 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tomatocare.R
 import com.tomatocare.di.AppContainer
+import com.tomatocare.ui.components.FeedbackCard
 import com.tomatocare.ui.components.GrowingMethodSelector
 import com.tomatocare.ui.components.SeverityChip
-import com.tomatocare.ui.components.StressBadge
 import com.tomatocare.ui.components.TreatmentCard
 import com.tomatocare.ui.format.formatConfidence
 import com.tomatocare.ui.format.formatTimestamp
@@ -126,7 +126,6 @@ fun ResultScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        StressBadge(primary.stressType)
                         SeverityChip(primary.severityLevel)
                         Text(
                             text = formatConfidence(primary.confidence),
@@ -140,6 +139,16 @@ fun ResultScreen(
                     )
                 }
             }
+
+            FeedbackCard(
+                feedback = record.feedback,
+                conditions = state.conditions,
+                language = state.language,
+                onCorrect = { viewModel.submitFeedback(wasCorrect = true) },
+                onIncorrect = { id ->
+                    viewModel.submitFeedback(wasCorrect = false, correctedConditionId = id)
+                },
+            )
 
             Text(
                 text = stringResource(R.string.result_select_growing_method),

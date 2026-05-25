@@ -86,6 +86,12 @@ fun SettingsScreen(
         if (uri != null) showImportDialog = uri
     }
 
+    val trainingExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri != null) viewModel.onExportTrainingDataSelected(uri)
+    }
+
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -201,6 +207,16 @@ fun SettingsScreen(
             ) {
                 Text(stringResource(R.string.action_import_history))
             }
+            OutlinedButton(
+                onClick = { trainingExportLauncher.launch("tomatocare_training_data.zip") },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.action_export_training_data))
+            }
+            Text(
+                text = stringResource(R.string.export_training_data_hint),
+                style = MaterialTheme.typography.bodySmall,
+            )
             Button(
                 onClick = { showDeleteDialog = true },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB71C1C)),

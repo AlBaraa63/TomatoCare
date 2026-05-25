@@ -9,6 +9,7 @@ import com.tomatocare.data.storage.ScanExporter
 import com.tomatocare.data.storage.ScanImporter
 import com.tomatocare.data.storage.ScanStorageManager
 import com.tomatocare.data.storage.SettingsStore
+import com.tomatocare.data.storage.TrainingDataExporter
 import com.tomatocare.inference.ImagePreprocessor
 import com.tomatocare.inference.TFLiteEngine
 import kotlinx.coroutines.CoroutineScope
@@ -41,6 +42,8 @@ class AppContainer(context: Context) {
     val scanStorageManager: ScanStorageManager = ScanStorageManager(appContext)
     val scanExporter: ScanExporter = ScanExporter(appContext, scanStorageManager)
     val scanImporter: ScanImporter = ScanImporter(appContext, scanStorageManager)
+    val trainingDataExporter: TrainingDataExporter =
+        TrainingDataExporter(appContext, scanStorageManager)
 
     val treatmentRepository: TreatmentRepository = TreatmentRepository(appContext)
     val imagePreprocessor: ImagePreprocessor = ImagePreprocessor()
