@@ -33,9 +33,10 @@ TOMATO_MAP = {
 LEAF_IDX, TOMATO_IDX = 0, 1
 
 STAGE3 = {
-    "deployed": ASSETS / "stage3_disease_float16.tflite",
-    "ctrl": H / "tc_data" / "tflite_ctrl" / "stage3_disease_float16.tflite",
-    "gan": H / "tc_data" / "tflite_gan" / "stage3_disease_float16.tflite",
+    "deployed":  ASSETS / "stage3_disease_float16.tflite",
+    "ctrl":      H / "tc_data" / "tflite_ctrl"     / "stage3_disease_float16.tflite",
+    "gan":       H / "tc_data" / "tflite_gan"      / "stage3_disease_float16.tflite",
+    "lighting":  H / "tc_data" / "tflite_lighting" / "stage3_disease_float16.tflite",
 }
 
 
