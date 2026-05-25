@@ -372,10 +372,12 @@ The **leak rate** — the percentage of non-tomato inputs that survive both gate
 
 ### 10.5 Confusion Matrix
 
-Following the supervisor's recommendation, the Stage 3 evaluation computes a full **11×11 row-normalised confusion matrix**. This reveals:
-- Which disease pairs are most commonly confused (e.g., early blight vs. target spot — both cause circular necrotic lesions)
-- Which classes have lower per-class recall and may benefit from targeted data collection
-- The overall pattern of errors for the report's error analysis section
+Following the supervisor's recommendation, the Stage 3 evaluation computes a full **11×11 row-normalised confusion matrix** on the 6,682-image held-out test set. This reveals:
+- Which disease pairs are most commonly confused (e.g., early_blight vs. septoria and late_blight — all cause dark foliar lesions)
+- Which classes have lower per-class recall (early_blight: 0.913, septoria: 0.920, bacterial_spot: 0.944) and may benefit from targeted data collection
+- The overall pattern of errors, informing both the GAN experiment (§15) and the feedback flywheel (§13)
+
+The full matrix, per-class recall table, and heatmap are presented in §11.3.
 
 ---
 
@@ -411,15 +413,45 @@ Heavy augmentation cost ≈2 points on every lab metric. **Crucially, the lab te
 
 ### 11.3 Confusion Matrix Analysis
 
-The Stage 3 confusion matrix (11×11) was computed on the 6,682-image held-out test set. The strongest classes are `yellow_leaf_curl_virus` (0.998 recall) and `powdery_mildew` (0.996). The weakest, and their dominant confusions, are:
+The Stage 3 confusion matrix (11×11) was computed on the 6,682-image held-out test set. The figure below shows the row-normalised heatmap; the raw count table follows.
 
-| Class | Recall | Most-confused-with |
-|---|---|---|
-| Early Blight | 0.913 | Late Blight (21), Septoria (18) |
-| Septoria Leaf Spot | 0.920 | Target Spot (12), Late Blight (10), Leaf Mold (11) |
-| Bacterial Spot | 0.944 | Septoria (19) |
+![Stage 3 confusion matrix](confusion_matrix.png)
 
-These confusions are dermatologically intuitive — all four produce small dark foliar lesions — and they identify exactly which classes would benefit most from additional targeted data (informing the GAN experiment of §15 and the feedback flywheel of §13).
+**Raw count matrix (rows = true class, columns = predicted class):**
+
+| True \ Pred | bact | e_bl | hlth | l_bl | l_ml | mosv | powd | sept | spid | targ | ylcv |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **bacterial_spot** | **691** | 2 | 1 | 2 | 6 | 0 | 3 | 19 | 1 | 0 | 7 |
+| **early_blight** | 5 | **587** | 1 | 21 | 3 | 0 | 1 | 18 | 2 | 5 | 0 |
+| **healthy** | 1 | 0 | **795** | 0 | 1 | 1 | 0 | 1 | 0 | 3 | 2 |
+| **late_blight** | 1 | 6 | 1 | **766** | 10 | 0 | 4 | 4 | 0 | 0 | 0 |
+| **leaf_mold** | 3 | 0 | 3 | 9 | **717** | 0 | 0 | 4 | 2 | 0 | 1 |
+| **mosaic_virus** | 0 | 0 | 2 | 1 | 0 | **573** | 0 | 1 | 0 | 0 | 7 |
+| **powdery_mildew** | 0 | 0 | 0 | 0 | 0 | 0 | **251** | 1 | 0 | 0 | 0 |
+| **septoria_leaf_spot** | 9 | 8 | 2 | 10 | 11 | 3 | 1 | **686** | 3 | 12 | 1 |
+| **spider_mites** | 0 | 0 | 1 | 0 | 1 | 3 | 0 | 0 | **421** | 8 | 1 |
+| **target_spot** | 0 | 1 | 8 | 0 | 0 | 0 | 0 | 4 | 7 | **436** | 1 |
+| **yellow_leaf_curl_virus** | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **497** |
+
+*Abbreviations: bact = bacterial_spot, e_bl = early_blight, hlth = healthy, l_bl = late_blight, l_ml = leaf_mold, mosv = mosaic_virus, powd = powdery_mildew, sept = septoria_leaf_spot, spid = spider_mites, targ = target_spot, ylcv = yellow_leaf_curl_virus.*
+
+**Per-class recall summary:**
+
+| Class | Recall | n test | Key confusions |
+|---|---|---|---|
+| yellow_leaf_curl_virus | **0.998** | 498 | — |
+| powdery_mildew | **0.996** | 252 | — |
+| healthy | 0.989 | 804 | target_spot (3) |
+| mosaic_virus | 0.981 | 584 | ylcv (7) |
+| spider_mites | 0.968 | 435 | target_spot (8) |
+| late_blight | 0.967 | 792 | early_blight (6), leaf_mold (10) |
+| leaf_mold | 0.970 | 739 | late_blight (9) |
+| target_spot | 0.954 | 457 | healthy (8), spider_mites (7) |
+| bacterial_spot | 0.944 | 732 | septoria (19) |
+| septoria_leaf_spot | 0.920 | 746 | target_spot (12), late_blight (10), leaf_mold (11) |
+| **early_blight** | **0.913** | 643 | late_blight (21), septoria (18) |
+
+The strongest classes are `yellow_leaf_curl_virus` (0.998) and `powdery_mildew` (0.996). The three weakest — early_blight, septoria_leaf_spot, and bacterial_spot — all produce **small, dark, necrotic foliar lesions**, making them visually similar at 224×224 resolution. These confusions are dermatologically intuitive and identify exactly which classes would benefit most from targeted data collection (informing the GAN experiment of §15 and the feedback flywheel of §13).
 
 ### 11.4 Field Validation on Real Images — The Decisive Test
 
