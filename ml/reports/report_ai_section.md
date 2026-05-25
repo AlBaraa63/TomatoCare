@@ -427,7 +427,7 @@ Following the supervisor's request for a custom validation dataset, we evaluated
 
 | Model | Lab end-to-end | **Field end-to-end** | **Field disease acc** |
 |---|---|---|---|
-| Pre-aug (currently deployed) | 97.55% | **74.7%** | **84.3%** |
+| Pre-aug (original baseline) | 97.55% | **74.7%** | **84.3%** |
 | Post-aug (heavy UAE aug) | 95.17% | **63.3%** | **69.4%** |
 | | | 🔻 **−11.4 pts** | 🔻 **−14.9 pts** |
 
@@ -436,9 +436,11 @@ Following the supervisor's request for a custom validation dataset, we evaluated
 **Finding — heavy augmentation _degraded_ real-world accuracy.** This is the opposite of the hypothesis, and it is the single most valuable result of the ML work, because it was *measured* rather than assumed. The probable cause: tomato diseases are diagnosed largely by **colour** (chlorosis, lesion hue), and the heavy hue/saturation/gamma/JPEG jitter taught the model to discount exactly those cues. The supervisor's wording was "**lightweight** augmentation"; we implemented **heavy** augmentation and the field test quantified the overshoot.
 
 **Decisions locked in by this result:**
-1. **The heavy-augmentation model is NOT deployed.** The pre-augmentation model is retained — it is the stronger model on real images.
-2. **The deployed model now has an honest field benchmark: 74.7% end-to-end / 84.3% disease accuracy** on real field photos, versus 97.55% on lab images — a candid quantification of the lab→field gap.
+1. **The heavy-augmentation model is NOT deployed.** The pre-augmentation model was retained at this stage as the stronger model on real images.
+2. **The lab→field gap is real and measurable:** 97.55% lab → 74.7% field end-to-end on the pre-aug baseline — a candid quantification of the domain gap.
 3. The result motivates the data-centric directions of §13 (real-data flywheel; mild, lighting-only augmentation; and GAN-based class balancing) over aggressive synthetic distortion.
+
+*Note: subsequent experiments (§15) produced a minimal-augmentation control model ("ctrl") that outperformed this baseline on field images (77.2% e2e). The ctrl model is the final deployed Stage 3 — see model card and §19.*
 
 *Methodological caveat (disclosed): the field set overlapped the early-stopping validation data, so absolute numbers are mildly optimistic and n is small — but the caveat applies equally to both models, so the pre-vs-post delta is a fair comparison.*
 
@@ -594,13 +596,13 @@ Both variants were evaluated on the same PlantDoc field test set (n = 79) used t
 
 | Variant | Field end-to-end | bacterial_spot recall | Notes |
 |---|---|---|---|
-| Deployed (baseline) | 74.7% | **3/9 (33%)** | Currently shipped TFLite models |
-| ctrl (minimal-aug, no GAN) | 77.2% | 2/9 (22%) | Fair control — identical recipe |
+| Pre-aug (original baseline) | 74.7% | 3/9 (33%) | Baseline at time of experiment |
+| **ctrl (minimal-aug, no GAN)** | **77.2%** | 2/9 (22%) | **Now deployed** — best field e2e |
 | +GAN (minimal-aug, +600 synthetic) | 74.7% | 2/9 (22%) | Treatment |
 
 *(n = 79 PlantDoc tomato field images, test split only. n=903 train+test confirms same direction.)*
 
-**Adding 600 synthetic bacterial spot images produced zero improvement in bacterial spot field recall.** Both ctrl and +GAN achieved identical 2/9 (22%) field recall — lower than the deployed model's 3/9 — while overall end-to-end accuracy also showed no benefit from synthetic data.
+**Adding 600 synthetic bacterial spot images produced zero improvement in bacterial spot field recall.** Both ctrl and +GAN achieved identical 2/9 (22%) field recall — lower than the pre-aug baseline's 3/9 — while overall end-to-end accuracy also showed no benefit from synthetic data. Notably, the ctrl model achieved the highest field end-to-end accuracy (77.2%) of any variant tested, making it the final deployed Stage 3 model.
 
 ### 15.6 Interpretation
 
@@ -747,7 +749,7 @@ No transformation — of training data or of inference input — closes the gap.
 
 | Limitation | Description |
 |---|---|
-| Lab-dominated training data | PlantVillage images are controlled-condition. The lab-to-field gap has been measured (§11.4): 97.55% lab → 74.7% field end-to-end. Three experiments confirmed no lab-derived intervention closes this gap. |
+| Lab-dominated training data | PlantVillage images are controlled-condition. The lab-to-field gap has been measured: 96.5% lab → 77.2% field end-to-end (deployed ctrl model). Four experiments confirmed no lab-derived or inference-side intervention closes this gap. |
 | Small field test set | The PlantDoc test set (n = 79) is real-world but small; the 903-image train+test sample confirms the same direction, but a larger dedicated UAE field test set would give tighter confidence intervals. |
 | Temperature calibration on val split | The validation split influenced early stopping, so the calibration ECE (0.0046) may be mildly optimistic; an independent calibration set would be more rigorous. |
 | Single-leaf assumption | The app is designed for a single, centred leaf; multi-leaf or full-plant photos may behave unpredictably at the gate stages. |
@@ -772,7 +774,7 @@ No transformation — of training data or of inference input — closes the gap.
 
 TomatoCare v2 represents a significant architectural and methodological upgrade over v1. The three-stage cascade resolves the fundamental safety failure of the v1 single-classifier design: non-tomato images are now hard-rejected at the gate stage rather than silently misclassified with high confidence. Temperature scaling (Guo et al., 2017) ensures that the confidence scores displayed to the user track true accuracy — with an ECE of 0.0046, the model's stated confidence is statistically meaningful. These two contributions are solid and are not undermined by the experimental findings below.
 
-On the lab benchmark, the deployed model achieves **97.55% end-to-end cascade accuracy**, **97.96% disease classification accuracy**, a **0.05% non-tomato leak rate**, and **ECE 0.0046** — metrics that compare favourably with published lightweight plant disease classification systems of comparable model size and mobile deployment target.
+On the lab benchmark, the deployed model (ctrl — minimal augmentation, trained after PlantDoc integration) achieves **96.5% end-to-end cascade accuracy**, a **0.05% non-tomato leak rate**, and **ECE 0.0046** — metrics that compare favourably with published lightweight plant disease classification systems of comparable model size and mobile deployment target. (The earlier pre-aug baseline scored 97.55% lab but only 74.7% field; the ctrl model trades 1 point of lab accuracy for a 2.5-point field gain.)
 
 **The central finding of the ML work, however, is the honest quantification of the lab-to-field gap.** Evaluated against the PlantDoc real-world field photograph benchmark (n = 79, test split), the deployed model achieves **77.2% end-to-end accuracy** and **87.1% disease accuracy** — roughly a 20-point gap from the lab result. This gap is not a surprise architecturally, but it has now been measured precisely for the first time. (The deployed Stage 3 is the minimal-augmentation model trained after PlantDoc integration, which outperformed the original baseline on both lab and field — see §16.4 / model card.)
 

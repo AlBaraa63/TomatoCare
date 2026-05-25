@@ -52,7 +52,7 @@ yellow_leaf_curl_virus.
 - Training data is **PlantVillage** (lab photos: uniform light backgrounds, studio
   lighting, macro lens). Real use is **field photos** (cluttered backgrounds,
   natural light, phone cameras).
-- Deployed model: **97.55% lab end-to-end** → **77.2% field end-to-end**
+- Deployed model (ctrl): **96.5% lab end-to-end** → **77.2% field end-to-end**
   (measured on PlantDoc real field photos, n=79 test). ~20-point gap.
 
 **Four experiments tried to close the gap. ALL failed. This is the contribution.**
@@ -152,8 +152,7 @@ uses), none.
 
 ## 8. What's LEFT to do (open tasks)
 
-1. **Open the PR** `sprintA/app/onboarding` → main (branch pushed; GitHub CLI not
-   installed, so create it via the web UI).
+1. ~~**Open the PR**~~ — Done. PR #1 merged, TC-21→27 squash-merged to main.
 2. **Export report to .docx** for submission (`ml/reports/report_ai_section.md`).
 3. **Notion** task cards / Decisions Log updates were SKIPPED at user's request —
    may need doing for the capstone process.
