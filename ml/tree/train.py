@@ -76,6 +76,10 @@ def uae_augment(x, y):
     stays clean. Per Dr. Yazeed's suggestion, the emphasis is on lighting
     variation and motion blur. Applied probabilistically so many images keep a
     mild transform and the leaf signal is never destroyed wholesale.
+
+    NOTE: field evaluation showed this DEGRADED real-world accuracy (−11.4 pts)
+    because the colour/saturation/JPEG jitter discarded diagnostic colour cues.
+    Use --aug lighting for the colour-safe variant.
     """
     x = tf.image.random_flip_left_right(x)
     # lighting: harsh sun / deep shade
@@ -92,14 +96,39 @@ def uae_augment(x, y):
     return tf.clip_by_value(x, 0.0, 1.0), y
 
 
+def lighting_augment(x, y):
+    """Lighting-only augmentation — brightness, contrast, gamma ONLY.
+
+    This is the colour-safe variant: NO hue shift, NO saturation change,
+    NO JPEG, NO motion blur.  Tomato diseases are diagnosed largely by colour
+    (chlorosis yellowing, lesion hue, bacterial watersoaking) — the heavy
+    pipeline destroyed that signal.  This variant keeps colour intact while
+    teaching the model to handle the exposure variation that IS the dominant
+    difference between PlantVillage lab photos and UAE field photos.
+
+    Parameters chosen to span the range seen in phone-captured field images:
+      brightness ±0.25  — sun/shade without blowing out highlights
+      contrast  [0.70, 1.45] — haze / harsh midday contrast
+      gamma     [0.70, 1.40] (50% prob) — nonlinear sensor exposure shift
+    """
+    x = tf.image.random_flip_left_right(x)
+    x = tf.image.random_brightness(x, 0.25)
+    x = tf.image.random_contrast(x, 0.70, 1.45)
+    x = _maybe(x, 0.50, lambda z: tf.image.adjust_gamma(
+        tf.clip_by_value(z, 1e-4, 1.0), tf.random.uniform([], 0.70, 1.40)))
+    return tf.clip_by_value(x, 0.0, 1.0), y
+
+
 def make_ds(directory: Path, batch: int, training: bool, aug: str = "heavy"):
     """image_dataset_from_directory -> [0,1] -> (train: aug) -> prefetch.
 
-    aug: "heavy"   = full UAE/mobile augmentation (uae_augment).
-         "minimal" = horizontal flip only (colour-preserving). Used by the GAN
-                     fold-in experiment, where heavy colour jitter would mask
-                     the synthetic samples' contribution.
-         "none"    = no augmentation.
+    aug: "heavy"    = full UAE/mobile augmentation (uae_augment).
+                      WARNING: degraded field accuracy by −11.4 pts in eval.
+         "lighting" = brightness/contrast/gamma only — colour-safe variant.
+                      Hypothesis: preserves diagnostic colour cues while
+                      handling the exposure variation dominant in field photos.
+         "minimal"  = horizontal flip only.
+         "none"     = no augmentation.
     """
     ds = tf.keras.utils.image_dataset_from_directory(
         directory,
@@ -120,8 +149,10 @@ def make_ds(directory: Path, batch: int, training: bool, aug: str = "heavy"):
     if training and aug != "none":
         # Per-image augmentation: unbatch -> augment -> rebatch. (random_* ops
         # draw one value per CALL, so per-image variation needs per-image map.)
-        fn = uae_augment if aug == "heavy" else \
-            (lambda x, y: (tf.image.random_flip_left_right(x), y))
+        fn = {"heavy":    uae_augment,
+              "lighting": lighting_augment,
+              "minimal":  lambda x, y: (tf.image.random_flip_left_right(x), y),
+              }.get(aug, lambda x, y: (tf.image.random_flip_left_right(x), y))
         ds = (ds.unbatch()
                 .map(fn, num_parallel_calls=AUTOTUNE)
                 .batch(batch))
@@ -166,8 +197,11 @@ def main() -> None:
     ap.add_argument("--batch", type=int, default=32)
     ap.add_argument("--epochs-head", type=int, default=None)
     ap.add_argument("--epochs-ft", type=int, default=None)
-    ap.add_argument("--aug", default="heavy", choices=["heavy", "minimal", "none"],
-                    help="training augmentation strength (default heavy)")
+    ap.add_argument("--aug", default="heavy",
+                    choices=["heavy", "lighting", "minimal", "none"],
+                    help="augmentation mode: heavy (full UAE), lighting "
+                         "(brightness/contrast/gamma only — colour-safe), "
+                         "minimal (flip only), none (default: heavy)")
     args = ap.parse_args()
 
     cfg = STAGES[args.stage]
