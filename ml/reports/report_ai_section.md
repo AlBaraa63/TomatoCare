@@ -4,11 +4,6 @@
 
 ---
 
-> **Status:** Complete draft — all experiment results confirmed and incorporated.  
-> Transfer to .docx for final submission.
-
----
-
 ## Table of Contents
 
 1. [Problem Definition](#1-problem-definition)
@@ -63,22 +58,34 @@ The system classifies leaves into **11 conditions**: 10 diseases and the healthy
 
 ## 2. Dataset
 
-### 2.1 Primary Source — PlantVillage
-The core training data is drawn from the PlantVillage dataset, a widely-used benchmark of ~54,000 lab-photographed plant leaf images with expert-verified labels. For TomatoCare, we use the **11 tomato condition classes** (10 diseases + healthy), which together contribute approximately 18,000 images.
+### 2.1 Primary Source — tomato20k (PlantVillage-derived)
+The Stage 3 disease classifier is trained on **tomato20k**, a PlantVillage-derived tomato leaf collection that provides **11 classes** (10 diseases + healthy). It supplies **25,851 training images** and **6,683 held-out test images** (the `valid` partition, never used during training or early stopping). The eleventh class, *powdery mildew* (1,004 train / 252 test), is **not** present in the original PlantVillage tomato subset and originates from the tomato20k compilation.
 
-**Characteristics:**
-- Uniform white background — controlled studio lighting
-- High image resolution, well-focused
-- Class imbalance: healthy and early blight are over-represented; spider mites and target spot are smaller classes
+| Class | Train | Test |
+|---|---|---|
+| bacterial_spot | 2,826 | 732 |
+| early_blight | 2,455 | 643 |
+| healthy | 3,051 | 805 |
+| late_blight | 3,113 | 792 |
+| leaf_mold | 2,754 | 739 |
+| mosaic_virus | 2,153 | 584 |
+| powdery_mildew | 1,004 | 252 |
+| septoria_leaf_spot | 2,882 | 746 |
+| spider_mites | 1,747 | 435 |
+| target_spot | 1,827 | 457 |
+| yellow_leaf_curl_virus | 2,039 | 498 |
+| **Total** | **25,851** | **6,683** |
+
+**Characteristics:** uniform white background, controlled studio lighting, high resolution. Class imbalance present: powdery_mildew (1,256 total) and spider_mites (2,182) are the smallest classes.
 
 ### 2.2 Supplementary Source — PlantDoc
-PlantDoc is a complementary dataset consisting of real-world field images of plant diseases collected under uncontrolled conditions. We integrated a subset of its tomato classes to address the lab-vs-field shortcut (see §3) by giving the Stage 3 disease classifier exposure to some real-world imaging conditions during training.
+PlantDoc provides real-world field photographs of plant diseases collected under uncontrolled conditions (cluttered backgrounds, natural light, phone cameras). We integrated a subset of its tomato classes (824 training images) into the Stage 2/3 training splits to break the lab-vs-field shortcut, and held out 79 tomato images as the dedicated **field benchmark** (§11.4). PlantDoc has no powdery_mildew or target_spot tomato class, so those two classes are lab-only in this project.
 
 ### 2.3 Gate Training Data
 The two gate classifiers (Stage 1 and Stage 2) were trained on purpose-built binary datasets:
 
-- **Stage 1 (leaf vs. not-leaf):** Tomato leaves mixed with natural-world images (people, animals, vehicles, food) sourced from ImageNette and similar natural image benchmarks.
-- **Stage 2 (tomato vs. other-leaf):** Tomato leaf images mixed with non-tomato leaf images drawn from the PlantVillage other-crop classes (apple, corn, grape, cherry, pepper, etc.).
+- **Stage 1 (leaf vs. not-leaf):** Tomato leaves mixed with natural-world images (people, animals, vehicles, food) sourced from ImageNette-style natural image benchmarks.
+- **Stage 2 (tomato vs. other-leaf):** Tomato leaf images mixed with non-tomato PlantVillage crop leaves — 4,627 images from pepper and potato — plus PlantDoc non-tomato field leaves.
 
 ### 2.4 Hard-Negative Test Set
 A separate held-out test set was constructed specifically to evaluate the cascade's robustness to out-of-distribution inputs (see §10). This set was **never used for training or early stopping** — it exists only as an honest post-hoc exam.
@@ -298,10 +305,11 @@ ECE is the weighted average of |accuracy − confidence| across confidence bins.
 
 | Metric | Pre-calibration | Post-calibration |
 |---|---|---|
-| ECE | ~0.05–0.10 (typical uncalibrated CNN) | **0.0046** |
-| Val accuracy | unchanged | unchanged |
+| ECE (val split, in-sample) | ~0.05–0.10 (typical uncalibrated CNN) | 0.0046 |
+| **ECE (held-out test set)** | — | **0.061** |
+| Accuracy | unchanged | unchanged |
 
-The post-calibration ECE of **0.0046** confirms that the confidence scores now closely track true accuracy — when the model says 0.90, it is correct approximately 90% of the time.
+Temperature scaling substantially reduces overconfidence. The **held-out test-set ECE of 0.061** (15-bin, 6,683 images) is the honest deployment figure — indicating reasonably, though not tightly, calibrated confidence. The in-sample val-split figure of 0.0046 was measured on the same data used to fit T and is not representative of out-of-sample behaviour. A dedicated held-out calibration set and re-fit would be required to substantiate a tighter ECE (noted as future work in §18).
 
 ---
 
@@ -319,14 +327,14 @@ Each stage model is exported to TFLite with **float16 weight quantisation**:
 
 The NFR-04 size budget is **15 MB total** for all three models combined:
 
-| Stage | ~Size |
-|---|---|
-| Stage 1 (Small) | ~0.6 MB |
-| Stage 2 (Small) | ~0.6 MB |
-| Stage 3 (Large) | ~4.0 MB |
-| **Total** | **~5.2 MB** |
+| Stage | File | Actual size |
+|---|---|---|
+| Stage 1 (Small) | stage1_leaf_float16.tflite | 1.92 MB |
+| Stage 2 (Small) | stage2_tomato_float16.tflite | 1.92 MB |
+| Stage 3 (Large) | stage3_disease_float16.tflite | 6.03 MB |
+| **Total** | | **9.87 MB** |
 
-This comfortably satisfies NFR-04 and keeps the application APK size competitive.
+This comfortably satisfies the 15 MB NFR-04 budget. Sizes measured from the deployed assets on disk (source: `eval_deployed.json`).
 
 ### 9.3 Parity Verification
 
@@ -383,31 +391,34 @@ The full matrix, per-class recall table, and heatmap are presented in §11.3.
 
 ## 11. Results
 
-### 11.1 Pre-Augmentation Baseline (Version 2, Before UAE Augmentation)
+### 11.1 Deployed Model — Lab Evaluation (ctrl, final)
 
-These are the results after deploying the three-stage cascade but before adding heavy UAE augmentation — the clean baseline we are comparing against.
+These are the results for the **deployed ctrl model** — minimal augmentation (horizontal flip only), trained after PlantDoc integration — evaluated on the 6,683-image held-out `tomato20k/valid` test set. Metrics are recomputed by running the shipped TFLite artifacts (source: `eval_deployed.json`).
 
 | Metric | Value |
 |---|---|
-| Stage 3 disease test accuracy | **97.96%** |
+| Stage 3 disease test accuracy (n=6,683) | **97.59%** |
 | Stage 2 other-leaf rejection recall | **99.37%** |
 | Unseen species leak rate | **0.05%** |
 | Real non-leaf rejection recall | **99.55%** |
-| End-to-end cascade accuracy | **97.55%** |
-| ECE (post-calibration) | **0.0046** |
+| End-to-end cascade accuracy | **97.19%** |
+| ECE (held-out test, 15-bin) | **0.061** |
+
+*(Gate rejection metrics are carried from the pre-augmentation baseline; the gate models are unchanged. End-to-end and disease accuracy are recomputed against the deployed TFLite.)*
 
 ### 11.2 Heavy-Augmentation Results (Version 2 + Heavy UAE Augmentation)
 
 All three stages were retrained with the heavy augmentation pipeline of §6 and re-evaluated on the **lab test set**:
 
-| Metric (lab test set) | Pre-augmentation | Post-augmentation | Delta |
+| Metric (lab test set) | Pre-aug baseline | Post-aug (heavy UAE) | Delta |
 |---|---|---|---|
-| Stage 3 disease test accuracy | 97.96% | 96.08% | 🔻 −1.88 |
+| Stage 3 disease test accuracy | 97.59%* | 96.08% | 🔻 −1.51 |
 | Stage 2 other-leaf rejection recall | 99.37% | 99.02% | 🔻 −0.35 |
 | Unseen species leak rate | 0.05% | 0.22% | 🔻 +0.17 |
 | Real non-leaf leak rate | 0.45% | 0.69% | 🔻 +0.24 |
-| End-to-end cascade accuracy | 97.55% | 95.17% | 🔻 −2.38 |
-| ECE (post-calibration) | 0.0046 | 0.0069 | ~ both excellent |
+| End-to-end cascade accuracy | 97.19%* | 95.17% | 🔻 −2.02 |
+
+*\*Pre-aug baseline = deployed ctrl model (recomputed from TFLite); heavy-aug numbers are from that experiment's Keras evaluation.*
 
 Heavy augmentation cost ≈2 points on every lab metric. **Crucially, the lab test set cannot reveal whether this bought any real-world robustness** — the entire test set is lab-photographed. To answer that we built a dedicated field-validation set (§11.4).
 
@@ -415,43 +426,45 @@ Heavy augmentation cost ≈2 points on every lab metric. **Crucially, the lab te
 
 The Stage 3 confusion matrix (11×11) was computed on the 6,682-image held-out test set. The figure below shows the row-normalised heatmap; the raw count table follows.
 
-![Stage 3 confusion matrix](confusion_matrix.png)
+![Stage 3 confusion matrix — deployed ctrl model](confusion_matrix_deployed.png)
+
+*Deployed TFLite cascade vs held-out `tomato20k/valid`, n = 6,683. Source: `eval_deployed.json`.*
 
 **Raw count matrix (rows = true class, columns = predicted class):**
 
 | True \ Pred | bact | e_bl | hlth | l_bl | l_ml | mosv | powd | sept | spid | targ | ylcv |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **bacterial_spot** | **691** | 2 | 1 | 2 | 6 | 0 | 3 | 19 | 1 | 0 | 7 |
-| **early_blight** | 5 | **587** | 1 | 21 | 3 | 0 | 1 | 18 | 2 | 5 | 0 |
-| **healthy** | 1 | 0 | **795** | 0 | 1 | 1 | 0 | 1 | 0 | 3 | 2 |
-| **late_blight** | 1 | 6 | 1 | **766** | 10 | 0 | 4 | 4 | 0 | 0 | 0 |
-| **leaf_mold** | 3 | 0 | 3 | 9 | **717** | 0 | 0 | 4 | 2 | 0 | 1 |
-| **mosaic_virus** | 0 | 0 | 2 | 1 | 0 | **573** | 0 | 1 | 0 | 0 | 7 |
-| **powdery_mildew** | 0 | 0 | 0 | 0 | 0 | 0 | **251** | 1 | 0 | 0 | 0 |
-| **septoria_leaf_spot** | 9 | 8 | 2 | 10 | 11 | 3 | 1 | **686** | 3 | 12 | 1 |
-| **spider_mites** | 0 | 0 | 1 | 0 | 1 | 3 | 0 | 0 | **421** | 8 | 1 |
-| **target_spot** | 0 | 1 | 8 | 0 | 0 | 0 | 0 | 4 | 7 | **436** | 1 |
-| **yellow_leaf_curl_virus** | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **497** |
+| **bacterial_spot** | **717** | 2 | 0 | 1 | 1 | 0 | 0 | 6 | 1 | 0 | 4 |
+| **early_blight** | 3 | **606** | 1 | 10 | 6 | 0 | 1 | 11 | 0 | 3 | 2 |
+| **healthy** | 0 | 0 | **795** | 0 | 1 | 1 | 0 | 0 | 0 | 6 | 2 |
+| **late_blight** | 3 | 4 | 2 | **773** | 4 | 0 | 2 | 2 | 1 | 1 | 0 |
+| **leaf_mold** | 4 | 1 | 2 | 5 | **718** | 2 | 0 | 0 | 1 | 5 | 1 |
+| **mosaic_virus** | 0 | 0 | 2 | 0 | 0 | **576** | 1 | 0 | 0 | 2 | 3 |
+| **powdery_mildew** | 0 | 0 | 0 | 0 | 0 | 0 | **252** | 0 | 0 | 0 | 0 |
+| **septoria_leaf_spot** | 13 | 4 | 0 | 2 | 3 | 1 | 1 | **714** | 1 | 7 | 0 |
+| **spider_mites** | 0 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | **424** | 8 | 0 |
+| **target_spot** | 0 | 0 | 1 | 0 | 0 | 1 | 0 | 1 | 1 | **453** | 0 |
+| **yellow_leaf_curl_virus** | 2 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 1 | 0 | **494** |
 
 *Abbreviations: bact = bacterial_spot, e_bl = early_blight, hlth = healthy, l_bl = late_blight, l_ml = leaf_mold, mosv = mosaic_virus, powd = powdery_mildew, sept = septoria_leaf_spot, spid = spider_mites, targ = target_spot, ylcv = yellow_leaf_curl_virus.*
 
-**Per-class recall summary:**
+**Per-class recall summary (deployed ctrl model):**
 
 | Class | Recall | n test | Key confusions |
 |---|---|---|---|
-| yellow_leaf_curl_virus | **0.998** | 498 | — |
-| powdery_mildew | **0.996** | 252 | — |
-| healthy | 0.989 | 804 | target_spot (3) |
-| mosaic_virus | 0.981 | 584 | ylcv (7) |
-| spider_mites | 0.968 | 435 | target_spot (8) |
-| late_blight | 0.967 | 792 | early_blight (6), leaf_mold (10) |
-| leaf_mold | 0.970 | 739 | late_blight (9) |
-| target_spot | 0.954 | 457 | healthy (8), spider_mites (7) |
-| bacterial_spot | 0.944 | 732 | septoria (19) |
-| septoria_leaf_spot | 0.920 | 746 | target_spot (12), late_blight (10), leaf_mold (11) |
-| **early_blight** | **0.913** | 643 | late_blight (21), septoria (18) |
+| powdery_mildew | **1.000** | 252 | — |
+| target_spot | **0.991** | 457 | spider_mites (1), septoria (1) |
+| yellow_leaf_curl_virus | 0.992 | 498 | bacterial_spot (2) |
+| mosaic_virus | 0.986 | 584 | ylcv (3), target_spot (2) |
+| bacterial_spot | 0.980 | 732 | septoria (6) |
+| healthy | 0.988 | 805 | target_spot (6) |
+| late_blight | 0.976 | 792 | early_blight (4), leaf_mold (4) |
+| spider_mites | 0.975 | 435 | target_spot (8) |
+| leaf_mold | 0.972 | 739 | late_blight (5), target_spot (5) |
+| septoria_leaf_spot | 0.957 | 746 | bacterial_spot (13), target_spot (7) |
+| **early_blight** | **0.943** | 643 | late_blight (10), septoria (11) |
 
-The strongest classes are `yellow_leaf_curl_virus` (0.998) and `powdery_mildew` (0.996). The three weakest — early_blight, septoria_leaf_spot, and bacterial_spot — all produce **small, dark, necrotic foliar lesions**, making them visually similar at 224×224 resolution. These confusions are dermatologically intuitive and identify exactly which classes would benefit most from targeted data collection (informing the GAN experiment of §15 and the feedback flywheel of §13).
+The deployed model's strongest class is `powdery_mildew` (1.000 recall) and weakest are early_blight (0.943) and septoria_leaf_spot (0.957). Both belong to the **small, dark, necrotic lesion cluster** — visually similar at 224×224 resolution. These confusions are biologically coherent and identify the classes that would most benefit from targeted field data (informing the GAN experiment of §15 and the feedback flywheel of §13).
 
 ### 11.4 Field Validation on Real Images — The Decisive Test
 
@@ -676,7 +689,7 @@ PlantDoc provides a real-world field benchmark but is limited to 79 test images.
 
 | Benchmark | E2E accuracy | n | Notes |
 |---|---|---|---|
-| Lab (PlantVillage) | 97.55% | 6,682 | White background, controlled |
+| Lab (tomato20k held-out) | 97.19% | 6,683 | White background, controlled |
 | PlantDoc (real field) | 77.2% | 79 | Real phone photos |
 | **Composited (this)** | **65.5%** | **165** | Lab morphology + synthetic backgrounds |
 
@@ -783,7 +796,7 @@ No transformation — of training data or of inference input — closes the gap.
 |---|---|
 | Lab-dominated training data | PlantVillage images are controlled-condition. The lab-to-field gap has been measured: 96.5% lab → 77.2% field end-to-end (deployed ctrl model). Four experiments confirmed no lab-derived or inference-side intervention closes this gap. |
 | Small field test set | The PlantDoc test set (n = 79) is real-world but small; the 903-image train+test sample confirms the same direction, but a larger dedicated UAE field test set would give tighter confidence intervals. |
-| Temperature calibration on val split | The validation split influenced early stopping, so the calibration ECE (0.0046) may be mildly optimistic; an independent calibration set would be more rigorous. |
+| Temperature calibration on val split | T was fitted on the validation split (which influenced early stopping), so the in-sample ECE (0.0046) is optimistic. The honest held-out test ECE is **0.061** — reasonably calibrated, but a dedicated held-out calibration set and re-fit would be required to achieve a tighter result. |
 | Single-leaf assumption | The app is designed for a single, centred leaf; multi-leaf or full-plant photos may behave unpredictably at the gate stages. |
 | 11 conditions only | Does not cover all possible tomato conditions; novel diseases will produce a low-confidence warning but not a correct diagnosis. |
 | Bacterial spot field recall | Currently 3/9 (33%) on field images; all three augmentation experiments failed to improve it. Real field data is the only demonstrated path forward. |
@@ -796,7 +809,7 @@ No transformation — of training data or of inference input — closes the gap.
 
 3. **Leaf segmentation on field data** — the MobileSAM segmentation experiment (§14) showed no benefit on lab images, because lab backgrounds are near-uniform. Once real field images are available (via flywheel), applying background suppression before retraining may be meaningfully positive, as field backgrounds (soil, canopy, fencing) are complex and do constitute a confounding signal.
 
-4. **Per-class confidence threshold tuning** — the current 0.60 global threshold could be replaced by per-class thresholds fitted on the held-out test set, reducing false low-confidence warnings for high-performing classes (e.g., yellow_leaf_curl_virus at 0.998 recall) and increasing sensitivity for weak ones (bacterial_spot, early_blight).
+4. **Per-class confidence threshold tuning** — the current 0.60 global threshold could be replaced by per-class thresholds fitted on the held-out test set, reducing false low-confidence warnings for high-performing classes (e.g., powdery_mildew at 1.000 recall, yellow_leaf_curl_virus at 0.992) and increasing sensitivity for weak ones (early_blight at 0.943, septoria_leaf_spot at 0.957).
 
 5. **Camera integration (CameraX)** — Phase 2 of the v2 roadmap adds live camera capture with real-time blur and framing feedback, allowing the user to capture a sharp, centred leaf before committing to inference.
 
@@ -804,9 +817,9 @@ No transformation — of training data or of inference input — closes the gap.
 
 ## 19. Conclusion
 
-TomatoCare v2 represents a significant architectural and methodological upgrade over v1. The three-stage cascade resolves the fundamental safety failure of the v1 single-classifier design: non-tomato images are now hard-rejected at the gate stage rather than silently misclassified with high confidence. Temperature scaling (Guo et al., 2017) ensures that the confidence scores displayed to the user track true accuracy — with an ECE of 0.0046, the model's stated confidence is statistically meaningful. These two contributions are solid and are not undermined by the experimental findings below.
+TomatoCare v2 represents a significant architectural and methodological upgrade over v1. The three-stage cascade resolves the fundamental safety failure of the v1 single-classifier design: non-tomato images are now hard-rejected at the gate stage rather than silently misclassified with high confidence. Temperature scaling (Guo et al., 2017) is applied to the confidence scores; the held-out test ECE is 0.061 — reasonably calibrated, with tighter calibration identified as future work. These contributions are solid and are not undermined by the experimental findings below.
 
-On the lab benchmark, the deployed model (ctrl — minimal augmentation, trained after PlantDoc integration) achieves **96.5% end-to-end cascade accuracy**, a **0.05% non-tomato leak rate**, and **ECE 0.0046** — metrics that compare favourably with published lightweight plant disease classification systems of comparable model size and mobile deployment target. (The earlier pre-aug baseline scored 97.55% lab but only 74.7% field; the ctrl model trades 1 point of lab accuracy for a 2.5-point field gain.)
+On the lab benchmark, the deployed model (ctrl — minimal augmentation, trained after PlantDoc integration) achieves **97.59% disease-classification accuracy**, **97.19% end-to-end cascade accuracy**, and a **0.05% non-tomato leak rate** — evaluated by running the shipped TFLite files against the 6,683-image held-out test set (source: `eval_deployed.json`). Total model footprint is 9.87 MB, within the 15 MB deployment budget. Every class achieves ≥ 94% recall; the weakest are early_blight (0.943) and septoria_leaf_spot (0.957) — both from the dark-lesion cluster.
 
 **The central finding of the ML work, however, is the honest quantification of the lab-to-field gap.** Evaluated against the PlantDoc real-world field photograph benchmark (n = 79, test split), the deployed model achieves **77.2% end-to-end accuracy** and **87.1% disease accuracy** — roughly a 20-point gap from the lab result. This gap is not a surprise architecturally, but it has now been measured precisely for the first time. (The deployed Stage 3 is the minimal-augmentation model trained after PlantDoc integration, which outperformed the original baseline on both lab and field — see §16.4 / model card.)
 

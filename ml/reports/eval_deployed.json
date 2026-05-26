@@ -1,0 +1,225 @@
+{
+  "_source": "DEPLOYED tflite cascade vs tomato20k/valid (held-out)",
+  "test_set": "C:\\Users\\POTATO\\Desktop\\TomatoCare\\ml\\dataset\\raw\\tomato20k\\valid",
+  "n_test": 6683,
+  "model_sizes_bytes": {
+    "stage1": 1921456,
+    "stage2": 1921456,
+    "stage3": 6028328
+  },
+  "stage3_disease": {
+    "test_accuracy": 0.9759,
+    "ece_test_15bin": 0.0613,
+    "per_class": {
+      "bacterial_spot": {
+        "recall": 0.9795,
+        "n": 732
+      },
+      "early_blight": {
+        "recall": 0.9425,
+        "n": 643
+      },
+      "healthy": {
+        "recall": 0.9876,
+        "n": 805
+      },
+      "late_blight": {
+        "recall": 0.976,
+        "n": 792
+      },
+      "leaf_mold": {
+        "recall": 0.9716,
+        "n": 739
+      },
+      "mosaic_virus": {
+        "recall": 0.9863,
+        "n": 584
+      },
+      "powdery_mildew": {
+        "recall": 1.0,
+        "n": 252
+      },
+      "septoria_leaf_spot": {
+        "recall": 0.9571,
+        "n": 746
+      },
+      "spider_mites": {
+        "recall": 0.9747,
+        "n": 435
+      },
+      "target_spot": {
+        "recall": 0.9912,
+        "n": 457
+      },
+      "yellow_leaf_curl_virus": {
+        "recall": 0.992,
+        "n": 498
+      }
+    },
+    "confusion_labels": [
+      "bacterial_spot",
+      "early_blight",
+      "healthy",
+      "late_blight",
+      "leaf_mold",
+      "mosaic_virus",
+      "powdery_mildew",
+      "septoria_leaf_spot",
+      "spider_mites",
+      "target_spot",
+      "yellow_leaf_curl_virus"
+    ],
+    "confusion_matrix": [
+      [
+        717,
+        2,
+        0,
+        1,
+        1,
+        0,
+        0,
+        6,
+        1,
+        0,
+        4
+      ],
+      [
+        3,
+        606,
+        1,
+        10,
+        6,
+        0,
+        1,
+        11,
+        0,
+        3,
+        2
+      ],
+      [
+        0,
+        0,
+        795,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        6,
+        2
+      ],
+      [
+        3,
+        4,
+        2,
+        773,
+        4,
+        0,
+        2,
+        2,
+        1,
+        1,
+        0
+      ],
+      [
+        4,
+        1,
+        2,
+        5,
+        718,
+        2,
+        0,
+        0,
+        1,
+        5,
+        1
+      ],
+      [
+        0,
+        0,
+        2,
+        0,
+        0,
+        576,
+        1,
+        0,
+        0,
+        2,
+        3
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        252,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        13,
+        4,
+        0,
+        2,
+        3,
+        1,
+        1,
+        714,
+        1,
+        7,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+        0,
+        0,
+        424,
+        8,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        1,
+        1,
+        453,
+        0
+      ],
+      [
+        2,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        494
+      ]
+    ]
+  },
+  "end_to_end": {
+    "n_tomato_test": 6683,
+    "passed_leaf_gate_pct": 100.0,
+    "passed_both_gates_pct": 99.42,
+    "correct_diagnosis_pct": 97.19
+  },
+  "model_total_mb": 9.87
+}
