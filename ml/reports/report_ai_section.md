@@ -380,9 +380,9 @@ The **leak rate** — the percentage of non-tomato inputs that survive both gate
 
 ### 10.5 Confusion Matrix
 
-Following the supervisor's recommendation, the Stage 3 evaluation computes a full **11×11 row-normalised confusion matrix** on the 6,682-image held-out test set. This reveals:
+Following the supervisor's recommendation, the Stage 3 evaluation computes a full **11×11 row-normalised confusion matrix** on the 6,683-image held-out test set. This reveals:
 - Which disease pairs are most commonly confused (e.g., early_blight vs. septoria and late_blight — all cause dark foliar lesions)
-- Which classes have lower per-class recall (early_blight: 0.913, septoria: 0.920, bacterial_spot: 0.944) and may benefit from targeted data collection
+- Which classes have lower per-class recall (early_blight: 0.943, septoria: 0.957, bacterial_spot: 0.980) and may benefit from targeted data collection
 - The overall pattern of errors, informing both the GAN experiment (§15) and the feedback flywheel (§13)
 
 The full matrix, per-class recall table, and heatmap are presented in §11.3.
@@ -412,19 +412,19 @@ All three stages were retrained with the heavy augmentation pipeline of §6 and 
 
 | Metric (lab test set) | Pre-aug baseline | Post-aug (heavy UAE) | Delta |
 |---|---|---|---|
-| Stage 3 disease test accuracy | 97.59%* | 96.08% | 🔻 −1.51 |
+| Stage 3 disease test accuracy | 97.96% | 96.08% | 🔻 −1.88 |
 | Stage 2 other-leaf rejection recall | 99.37% | 99.02% | 🔻 −0.35 |
 | Unseen species leak rate | 0.05% | 0.22% | 🔻 +0.17 |
 | Real non-leaf leak rate | 0.45% | 0.69% | 🔻 +0.24 |
-| End-to-end cascade accuracy | 97.19%* | 95.17% | 🔻 −2.02 |
+| End-to-end cascade accuracy | 97.55% | 95.17% | 🔻 −2.38 |
 
-*\*Pre-aug baseline = deployed ctrl model (recomputed from TFLite); heavy-aug numbers are from that experiment's Keras evaluation.*
+*The baseline here is the **pre-augmentation experimental baseline** — the model this experiment actually compared against (its field numbers appear in §11.4: 74.7% → 63.3%). It is a distinct, earlier model, **not** the finally-deployed ctrl model, whose recomputed metrics are reported in §11.1 / §11.3 (97.59% / 97.19%). Heavy-aug numbers are from that experiment's Keras evaluation.*
 
 Heavy augmentation cost ≈2 points on every lab metric. **Crucially, the lab test set cannot reveal whether this bought any real-world robustness** — the entire test set is lab-photographed. To answer that we built a dedicated field-validation set (§11.4).
 
 ### 11.3 Confusion Matrix Analysis
 
-The Stage 3 confusion matrix (11×11) was computed on the 6,682-image held-out test set. The figure below shows the row-normalised heatmap; the raw count table follows.
+The Stage 3 confusion matrix (11×11) was computed on the 6,683-image held-out test set. The figure below shows the row-normalised heatmap; the raw count table follows.
 
 ![Stage 3 confusion matrix — deployed ctrl model](confusion_matrix_deployed.png)
 
@@ -790,18 +790,18 @@ No transformation — of training data or of inference input — closes the gap.
 
 ## 18. Limitations and Future Work
 
-### 16.1 Current Limitations
+### 18.1 Current Limitations
 
 | Limitation | Description |
 |---|---|
-| Lab-dominated training data | PlantVillage images are controlled-condition. The lab-to-field gap has been measured: 96.5% lab → 77.2% field end-to-end (deployed ctrl model). Four experiments confirmed no lab-derived or inference-side intervention closes this gap. |
+| Lab-dominated training data | The tomato20k (PlantVillage-derived) images are controlled-condition. The lab-to-field gap has been measured: 97.19% lab → 77.2% field end-to-end (deployed ctrl model). Four experiments confirmed no lab-derived or inference-side intervention closes this gap. |
 | Small field test set | The PlantDoc test set (n = 79) is real-world but small; the 903-image train+test sample confirms the same direction, but a larger dedicated UAE field test set would give tighter confidence intervals. |
 | Temperature calibration on val split | T was fitted on the validation split (which influenced early stopping), so the in-sample ECE (0.0046) is optimistic. The honest held-out test ECE is **0.061** — reasonably calibrated, but a dedicated held-out calibration set and re-fit would be required to achieve a tighter result. |
 | Single-leaf assumption | The app is designed for a single, centred leaf; multi-leaf or full-plant photos may behave unpredictably at the gate stages. |
 | 11 conditions only | Does not cover all possible tomato conditions; novel diseases will produce a low-confidence warning but not a correct diagnosis. |
-| Bacterial spot field recall | Currently 3/9 (33%) on field images; all three augmentation experiments failed to improve it. Real field data is the only demonstrated path forward. |
+| Bacterial spot field recall | Weakest class on field images — 2/9 (22%) on the deployed ctrl model; all three augmentation experiments failed to improve it. Real field data is the only demonstrated path forward. |
 
-### 16.2 Recommended Future Work
+### 18.2 Recommended Future Work
 
 1. **Real-world field data collection via feedback flywheel** — as described in §13, the in-app feedback mechanism is the lowest-friction path to accumulating labelled UAE field images. The three failed lab-derived experiments (§6.5, §14, §15) confirm that real-world data is the only intervention that can close the lab-to-field gap. Even 200–400 field images per class would likely produce a measurable improvement.
 
