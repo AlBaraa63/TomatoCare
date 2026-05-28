@@ -7,13 +7,26 @@
 -->
 <resources>
     <string name="app_name">طماطم كير</string>
+    <string name="home_hero_title">افحص. شخص. عالج.</string>
     <string name="home_tagline">تشخيص أمراض أوراق الطماطم — يعمل دون اتصال بالإنترنت.</string>
     <string name="home_last_scan_title">آخر فحص</string>
+    
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_scan">فحص</string>
+    <string name="nav_encyclopedia">الأمراض</string>
+    <string name="nav_history">السجل</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <string name="home_stat_scans">عدد الفحوص</string>
+    <string name="home_stat_health">معدل الصحة</string>
+    <string name="home_stat_diseases">الحالات</string>
+    <string name="home_disease_distribution">توزيع الأمراض</string>
 
     <string name="screen_scan_title">فحص ورقة</string>
     <string name="screen_result_title">التشخيص</string>
     <string name="screen_history_title">سجل الفحوص</string>
     <string name="screen_settings_title">الإعدادات</string>
+    <string name="screen_encyclopedia_title">موسوعة الأمراض</string>
 
     <string name="action_scan_leaf">فحص ورقة</string>
     <string name="action_view_history">عرض السجل</string>
@@ -119,4 +132,17 @@
     <string name="snackbar_export_training_empty">لا توجد ملاحظات بعد. أكّد صحة بعض التشخيصات أو خطأها أولًا، ثم صدّر.</string>
     <string name="export_training_data_hint">يجمع الصور التي قدّمت ملاحظات عليها، موسومة حسب الحالة، في ملف ZIP لتحسين النموذج.</string>
     <string name="error_inference_failed">حدث خطأ غير متوقع أثناء التشخيص. يرجى المحاولة مجددًا.</string>
+
+    <string name="settings_appearance">المظهر</string>
+    <string name="settings_theme_mode">نمط المظهر</string>
+    <string name="theme_mode_light">فاتح</string>
+    <string name="theme_mode_dark">داكن</string>
+    <string name="theme_mode_system">النظام</string>
+
+    <string name="scan_stage_leaf">اكتشاف ورقة...</string>
+    <string name="scan_stage_tomato">التحقق من الطماطم...</string>
+    <string name="scan_stage_disease">تحليل المرض...</string>
+    
+    <string name="encyclopedia_search_hint">ابحث في الأمراض...</string>
+    <string name="encyclopedia_treatments_title">العلاجات والنصائح</string>
 </resources>

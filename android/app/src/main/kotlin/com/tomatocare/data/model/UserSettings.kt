@@ -11,4 +11,7 @@ data class UserSettings(
     // dialog once, then never shown again. New field defaults false so existing
     // installs (whose settings.json lacks it) also see it once after update.
     val hasSeenOnboarding: Boolean = false,
+    // UI appearance: LIGHT / DARK / SYSTEM. Defaults to SYSTEM so existing
+    // installs inherit the previous behaviour.
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
 )

@@ -1,14 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TomatoCare</string>
-    <string name="home_tagline">Identify tomato leaf diseases — fully offline.</string>
-    <string name="home_last_scan_title">Last scan</string>
+    <string name="home_hero_title">Scan. Diagnose. Treat.</string>
+    <string name="home_tagline">Offline tomato leaf disease detection.</string>
+    <string name="home_last_scan_title">Last Scan</string>
+
+    <string name="nav_home">Home</string>
+    <string name="nav_scan">Scan</string>
+    <string name="nav_encyclopedia">Diseases</string>
+    <string name="nav_history">History</string>
+    <string name="nav_settings">Settings</string>
+
+    <string name="home_stat_scans">Total Scans</string>
+    <string name="home_stat_health">Health Rate</string>
+    <string name="home_stat_diseases">Conditions</string>
+    <string name="home_disease_distribution">Disease Distribution</string>
 
     <!-- Screen titles -->
-    <string name="screen_scan_title">Scan a leaf</string>
+    <string name="screen_scan_title">Scan Leaf</string>
     <string name="screen_result_title">Diagnosis</string>
     <string name="screen_history_title">Scan history</string>
     <string name="screen_settings_title">Settings</string>
+    <string name="screen_encyclopedia_title">Disease Encyclopedia</string>
 
     <!-- Actions -->
     <string name="action_scan_leaf">Scan a leaf</string>
@@ -100,10 +113,15 @@
     <string name="history_empty">No scans yet. Take your first photo from the home screen.</string>
 
     <!-- Settings -->
+    <string name="settings_appearance">Appearance</string>
     <string name="settings_language">Language</string>
-    <string name="settings_default_growing_method">Default growing method</string>
-    <string name="settings_data_management">Data</string>
-    <string name="settings_about_blurb">TomatoCare runs fully offline. No images or scans leave your device.</string>
+    <string name="settings_theme_mode">Theme Mode</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="theme_mode_system">System</string>
+    <string name="settings_default_growing_method">Default Growing Method</string>
+    <string name="settings_data_management">Data Management</string>
+    <string name="settings_about_blurb">TomatoCare runs completely offline. Your images and scans never leave your device.</string>
     <string name="language_english">English</string>
     <string name="language_arabic">العربية (Arabic)</string>
 
@@ -122,7 +140,14 @@
     <string name="snackbar_import_failed">Import failed: %s</string>
     <string name="snackbar_export_failed">Export failed: %s</string>
     <string name="snackbar_exported_training">Exported %1$d labelled images across %2$d conditions</string>
-    <string name="snackbar_export_training_empty">No feedback yet. Mark some diagnoses correct or wrong first, then export.</string>
-    <string name="export_training_data_hint">Bundles the photos you gave feedback on, labelled by condition, into a ZIP for improving the model.</string>
-    <string name="error_inference_failed">Unexpected error during diagnosis. Please try again.</string>
+    <string name="snackbar_export_training_empty">No feedback found. Confirm or correct some scans first, then export.</string>
+    <string name="export_training_data_hint">Zips up images you provided feedback on, labelled by condition, for model retraining.</string>
+    <string name="error_inference_failed">An unexpected error occurred during diagnosis. Please try again.</string>
+    
+    <string name="scan_stage_leaf">Detecting leaf...</string>
+    <string name="scan_stage_tomato">Verifying tomato...</string>
+    <string name="scan_stage_disease">Analysing disease...</string>
+    
+    <string name="encyclopedia_search_hint">Search diseases...</string>
+    <string name="encyclopedia_treatments_title">Treatments &amp; Advice</string>
 </resources>

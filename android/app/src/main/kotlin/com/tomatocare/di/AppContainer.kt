@@ -46,6 +46,8 @@ class AppContainer(context: Context) {
         TrainingDataExporter(appContext, scanStorageManager)
 
     val treatmentRepository: TreatmentRepository = TreatmentRepository(appContext)
+    val conditionRepository: com.tomatocare.data.repository.ConditionRepository = 
+        com.tomatocare.data.repository.ConditionRepository(appContext)
     val imagePreprocessor: ImagePreprocessor = ImagePreprocessor()
     val tfliteEngine: TFLiteEngine = TFLiteEngine(
         context = appContext,

@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 data class HistoryUiState(
     val isLoading: Boolean = true,
     val records: List<ScanRecord> = emptyList(),
+    val language: com.tomatocare.data.model.Language = com.tomatocare.data.model.Language.ENGLISH,
 )
 
 sealed interface HistoryEvent {
@@ -34,9 +35,12 @@ class HistoryViewModel(private val container: AppContainer) : ViewModel() {
 
     fun refresh() {
         viewModelScope.launch {
+            val all = container.scanStorageManager.loadAll()
+            val settings = container.settingsStore.read()
             _uiState.value = HistoryUiState(
                 isLoading = false,
-                records = container.scanStorageManager.loadAll(),
+                records = all,
+                language = settings.language,
             )
         }
     }

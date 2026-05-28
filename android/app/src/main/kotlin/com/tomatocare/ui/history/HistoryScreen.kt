@@ -1,36 +1,37 @@
 package com.tomatocare.ui.history
 
-import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -40,15 +41,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tomatocare.R
 import com.tomatocare.data.model.ScanRecord
 import com.tomatocare.di.AppContainer
+import com.tomatocare.ui.components.ConfidenceBar
+import com.tomatocare.ui.components.SeverityChip
 import com.tomatocare.ui.format.formatTimestamp
 import com.tomatocare.ui.util.ThumbnailLoader
 
@@ -57,130 +63,195 @@ import com.tomatocare.ui.util.ThumbnailLoader
 fun HistoryScreen(
     container: AppContainer,
     onItemClick: (Int) -> Unit,
-    onBack: () -> Unit,
 ) {
     val viewModel: HistoryViewModel = viewModel(
         factory = HistoryViewModel.factory(container)
     )
     val state by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    val deletedMsg = stringResource(R.string.snackbar_scan_deleted)
-    val undoLabel = stringResource(R.string.snackbar_undo)
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
                 is HistoryEvent.RecordDeleted -> {
+                    val deletedRecord = event.record
+                    val message = context.getString(R.string.snackbar_scan_deleted)
+                    val action = context.getString(R.string.snackbar_undo)
                     val result = snackbarHostState.showSnackbar(
-                        message = deletedMsg,
-                        actionLabel = undoLabel,
-                        duration = SnackbarDuration.Short,
+                        message = message,
+                        actionLabel = action,
+                        duration = androidx.compose.material3.SnackbarDuration.Short,
                     )
                     if (result == SnackbarResult.ActionPerformed) {
-                        viewModel.undoDelete(event.record)
+                        viewModel.undoDelete(deletedRecord)
                     }
                 }
             }
         }
     }
 
+    LaunchedEffect(Unit) { viewModel.refresh() }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.screen_history_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
-                        )
-                    }
-                },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { inner ->
-        if (state.records.isEmpty()) {
+        if (state.records.isEmpty() && !state.isLoading) {
             Box(
                 modifier = Modifier.fillMaxSize().padding(inner),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(stringResource(R.string.history_empty))
+                Text(
+                    text = stringResource(R.string.history_empty),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(32.dp),
+                )
             }
-            return@Scaffold
-        }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(inner).padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(state.records, key = { it.scanId }) { record ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onItemClick(record.scanId) },
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        HistoryThumbnail(record)
-                        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                            val primary = record.primary
-                            if (primary != null) {
-                                Text(
-                                    text = primary.conditionNameEn,
-                                    style = MaterialTheme.typography.titleMedium,
-                                )
-                            }
-                            Text(
-                                text = formatTimestamp(record.timestamp),
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 6.dp),
-                            )
-                        }
-                        IconButton(onClick = { viewModel.delete(record) }) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = stringResource(R.string.action_delete),
-                            )
-                        }
-                    }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(inner),
+            ) {
+                items(
+                    items = state.records,
+                    key = { it.scanId },
+                ) { record ->
+                    SwipeableHistoryItem(
+                        record = record,
+                        language = state.language,
+                        onClick = { onItemClick(record.scanId) },
+                        onDelete = { viewModel.delete(record) },
+                    )
                 }
             }
         }
     }
 }
 
-/**
- * Loads the scan's saved JPEG asynchronously via [ThumbnailLoader].
- * Falls back to the Eco icon while loading or if the file is gone
- * (legitimately possible after history import or external file deletion).
- */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HistoryThumbnail(record: ScanRecord) {
-    val density = LocalDensity.current
-    val sizePx = with(density) { 40.dp.roundToPx() }
-    val thumb by produceState<Bitmap?>(initialValue = null, record.imagePath, sizePx) {
-        value = ThumbnailLoader.load(record.imagePath, sizePx)
+private fun SwipeableHistoryItem(
+    record: ScanRecord,
+    language: com.tomatocare.data.model.Language,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onDelete()
+                true
+            } else false
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.error)
+                    .padding(horizontal = 24.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = stringResource(R.string.action_delete),
+                    tint = Color.White,
+                )
+            }
+        },
+        enableDismissFromStartToEnd = false,
+    ) {
+        HistoryItemCard(record, language, onClick)
     }
-    val bmp = thumb
-    if (bmp != null) {
-        Image(
-            bitmap = bmp.asImageBitmap(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(6.dp)),
-        )
-    } else {
-        Icon(
-            imageVector = Icons.Default.Eco,
-            contentDescription = null,
-            modifier = Modifier.size(40.dp),
-        )
+}
+
+@Composable
+private fun HistoryItemCard(
+    record: ScanRecord,
+    language: com.tomatocare.data.model.Language,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val density = LocalDensity.current
+            val sizePx = with(density) { 64.dp.roundToPx() }
+            val thumb by produceState<android.graphics.Bitmap?>(null, record.imagePath) {
+                value = ThumbnailLoader.load(record.imagePath, sizePx)
+            }
+            
+            if (thumb != null) {
+                Image(
+                    bitmap = thumb!!.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(MaterialTheme.shapes.small),
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Default.Eco, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            Spacer(Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                val primary = record.primary
+                if (primary != null) {
+                    val name = if (language == com.tomatocare.data.model.Language.ARABIC) {
+                        primary.conditionNameAr
+                    } else {
+                        primary.conditionNameEn
+                    }
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    ConfidenceBar(confidence = primary.confidence.toFloat())
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SeverityChip(primary.severityLevel)
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            text = formatTimestamp(record.timestamp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
     }
 }

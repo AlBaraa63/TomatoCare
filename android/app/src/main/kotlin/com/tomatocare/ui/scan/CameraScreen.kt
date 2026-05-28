@@ -15,12 +15,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.content.ContextCompat
+import android.net.Uri
+import java.io.File
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,13 +62,17 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun CameraScreen(
-    onBitmapReady: (Bitmap) -> Unit,
-    onShowSnackbar: (String) -> Unit,
+    onCapture: (Uri) -> Unit,
+    onBack: () -> Unit,
+    showOverlay: Boolean,
+    onShowSnackbar: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
-    val controller = remember { CameraController(context) }
+    
+    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+    val imageCapture = remember { ImageCapture.Builder().build() }
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -74,16 +93,7 @@ fun CameraScreen(
             onShowSnackbar(context.getString(failure.reasonResId))
             return@rememberLauncherForActivityResult
         }
-        scope.launch {
-            try {
-                val bmp = ImageValidation.decodeBitmap(context, uri)
-                onBitmapReady(bmp)
-            } catch (e: Exception) {
-                onShowSnackbar(
-                    context.getString(R.string.error_image_decode_failed)
-                )
-            }
-        }
+        onCapture(uri)
     }
 
     if (!hasCameraPermission) {
@@ -105,53 +115,102 @@ fun CameraScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
-                PreviewView(ctx).also { pv ->
-                    scope.launch {
-                        try {
-                            controller.bind(pv, lifecycleOwner)
-                        } catch (e: Exception) {
-                            onShowSnackbar(
-                                context.getString(R.string.error_camera_bind_failed)
-                            )
-                        }
-                    }
+                PreviewView(ctx).apply {
+                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 }
             },
+            modifier = Modifier.fillMaxSize(),
+            update = { previewView ->
+                cameraProviderFuture.addListener({
+                    val provider = cameraProviderFuture.get()
+                    val preview = Preview.Builder().build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
+                    }
+                    try {
+                        provider.unbindAll()
+                        provider.bindToLifecycle(
+                            lifecycleOwner,
+                            CameraSelector.DEFAULT_BACK_CAMERA,
+                            preview,
+                            imageCapture
+                        )
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }, ContextCompat.getMainExecutor(context))
+            }
         )
 
+        // Viewfinder framing overlay
+        if (showOverlay) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val boxWidth = size.width * 0.7f
+                val boxHeight = size.width * 0.7f
+                val left = (size.width - boxWidth) / 2
+                val top = (size.height - boxHeight) / 2
+
+                drawRoundRect(
+                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.5f),
+                    topLeft = androidx.compose.ui.geometry.Offset(left, top),
+                    size = androidx.compose.ui.geometry.Size(boxWidth, boxHeight),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(40f, 40f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 3.dp.toPx(),
+                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(30f, 30f))
+                    )
+                )
+            }
+        }
+
+        // Top bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp, start = 24.dp, end = 24.dp),
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f), androidx.compose.ui.graphics.Color.Transparent)
+                    )
+                )
+                .padding(top = 40.dp, start = 16.dp, end = 16.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FilledIconButton(onClick = {
-                galleryLauncher.launch("image/*")
-            }) {
-                Icon(
-                    imageVector = Icons.Default.PhotoLibrary,
-                    contentDescription = stringResource(R.string.action_pick_from_gallery),
-                )
+            IconButton(onClick = onBack) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = androidx.compose.ui.graphics.Color.White)
             }
-
-            Button(onClick = {
-                scope.launch {
-                    try {
-                        val bmp = controller.captureBitmap()
-                        onBitmapReady(bmp)
-                    } catch (e: Exception) {
-                        onShowSnackbar(
-                            context.getString(R.string.error_capture_failed)
-                        )
-                    }
-                }
-            }) {
-                Text(stringResource(R.string.action_capture))
+            IconButton(onClick = { galleryLauncher.launch("image/*") }) {
+                Icon(Icons.Default.PhotoLibrary, contentDescription = "Gallery", tint = androidx.compose.ui.graphics.Color.White)
             }
         }
+
+        // Capture button
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 48.dp)
+                .size(72.dp)
+                .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.2f), CircleShape)
+                .padding(8.dp)
+                .background(androidx.compose.ui.graphics.Color.White, CircleShape)
+                .clickable {
+                    val file = File(context.cacheDir, "capture_${System.currentTimeMillis()}.jpg")
+                    val outputOptions = ImageCapture.OutputFileOptions.Builder(file).build()
+                    imageCapture.takePicture(
+                        outputOptions,
+                        ContextCompat.getMainExecutor(context),
+                        object : ImageCapture.OnImageSavedCallback {
+                            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                                val uri = output.savedUri ?: Uri.fromFile(file)
+                                onCapture(uri)
+                            }
+                            override fun onError(exc: ImageCaptureException) {
+                                exc.printStackTrace()
+                            }
+                        }
+                    )
+                }
+        )
     }
 }

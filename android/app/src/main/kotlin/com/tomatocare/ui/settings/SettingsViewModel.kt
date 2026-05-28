@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.tomatocare.data.model.GrowingMethod
 import com.tomatocare.data.model.Language
+import com.tomatocare.data.model.ThemeMode
 import com.tomatocare.data.model.UserSettings
 import com.tomatocare.data.storage.ExportResult
 import com.tomatocare.data.storage.ImportResult
@@ -65,6 +66,14 @@ class SettingsViewModel(
     fun onDefaultMethodChanged(method: GrowingMethod) {
         viewModelScope.launch {
             val updated = _uiState.value.settings.copy(defaultGrowingMethod = method)
+            container.settingsStore.write(updated)
+            _uiState.value = _uiState.value.copy(settings = updated)
+        }
+    }
+
+    fun onThemeModeChanged(themeMode: ThemeMode) {
+        viewModelScope.launch {
+            val updated = _uiState.value.settings.copy(themeMode = themeMode)
             container.settingsStore.write(updated)
             _uiState.value = _uiState.value.copy(settings = updated)
         }

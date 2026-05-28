@@ -3,6 +3,7 @@ package com.tomatocare.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.tomatocare.data.model.Language
 import com.tomatocare.data.model.ScanRecord
 import com.tomatocare.di.AppContainer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +16,10 @@ data class HomeUiState(
     val lastScan: ScanRecord? = null,
     val totalScans: Int = 0,
     val showOnboarding: Boolean = false,
+    val distinctConditions: Int = 0,
+    val healthRate: Int = 0,
+    val topConditions: List<Pair<String, Int>> = emptyList(),
+    val language: Language = Language.ENGLISH,
 )
 
 class HomeViewModel(private val container: AppContainer) : ViewModel() {
@@ -27,11 +32,35 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             val all = container.scanStorageManager.loadAll()
             val settings = container.settingsStore.read()
+            
+            val validScans = all.mapNotNull { it.primary }
+            val distinct = validScans.map { it.conditionId }.distinct().count()
+            // conditionId for the healthy class is "healthy" (see assets/treatments.json),
+            // not "tomato_healthy" — the old value left Health Rate stuck at 0%.
+            val healthyCount = validScans.count { it.conditionId == "healthy" }
+            val healthRate = if (validScans.isNotEmpty()) {
+                (healthyCount * 100f / validScans.size).toInt()
+            } else 0
+
+            val isArabic = settings.language == Language.ARABIC
+            val conditionCounts = validScans.groupingBy {
+                if (isArabic) it.conditionNameAr else it.conditionNameEn
+            }.eachCount()
+            
+            val topConditions = conditionCounts.entries
+                .sortedByDescending { it.value }
+                .take(3)
+                .map { it.key to it.value }
+
             _uiState.value = HomeUiState(
                 isLoading = false,
                 lastScan = all.firstOrNull(),
                 totalScans = all.size,
                 showOnboarding = !settings.hasSeenOnboarding,
+                distinctConditions = distinct,
+                healthRate = healthRate,
+                topConditions = topConditions,
+                language = settings.language,
             )
         }
     }
