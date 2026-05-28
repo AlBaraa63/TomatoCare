@@ -1,11 +1,18 @@
 # TomatoCare — Report Construction Worksheet, Audit & Defense Pack
 
-> **What this file is.** The control document behind `FINAL_REPORT.md`. It contains the
+> **What this file is.** The control/audit document behind the master report,
+> **`FINAL_REPORT_REVISED.md`** (in this same `reports/` folder). It contains the
 > file inventory, the single-source-of-truth table, the full consistency audit (C1–C8 +
 > newly-found issues), the scientific narrative, the structure rationale, five
 > hostile-examiner questions with model answers, the recompute/patch/supervisor logs, and a
-> corrected supervisor email. Every number in `FINAL_REPORT.md` traces back to the table in
+> corrected supervisor email. Every number in the master report traces back to the table in
 > STEP 1 here. Author: AlBaraa AlOlabi. Compiled 2026-05-26.
+>
+> **Note (2026-05-28):** the live email/correspondence status now lives in **`EMAIL_LOG.md`**
+> (single tracker). The corrected supervisor email near the end of this file is preserved as a
+> drafting record; `EMAIL_LOG.md` is the authoritative status. References below to
+> "`FINAL_REPORT.md`" / "the prior FINAL_REPORT" are historical — the current authoritative
+> master is `FINAL_REPORT_REVISED.md`; `FINAL_REPORT_FULL.md` is archived in `archive/`.
 
 ---
 
@@ -13,7 +20,7 @@
 
 ### Files successfully read
 - `ml/reports/report_ai_section.md` — complete 19-section AI/ML write-up; already reconciled to the deployed JSON. Primary content source.
-- `ml/reports/FINAL_REPORT.md` (prior partial) — earlier attempt at a full-capstone rebuild; only Abstract + Ch1 + Ch3 + Ch7 were written. Superseded by this rebuild.
+- `ml/reports/FINAL_REPORT.md` (prior partial) — earlier attempt at a full-capstone rebuild; only Abstract + Ch1 + Ch3 + Ch7 were written. Superseded — first by `FINAL_REPORT_FULL.md` (now in `archive/`), and finally by the hand-finished master **`FINAL_REPORT_REVISED.md`** (this folder), which is authoritative.
 - `ml/reports/eval_deployed.json` — **authoritative** deployed-TFLite metrics (held-out tomato20k/valid, n=6,683). Single source of truth.
 - `ml/reports/HANDOFF.md` — session/context brief; carries some stale figures (~6 MB, 96.5% lab e2e) that are NOT used in the report.
 - `ml/tree/calibrate.py` — temperature-scaling script; resolves the ECE contradiction (C1).
@@ -435,7 +442,9 @@ pre-final-submission check. We do not claim those two figures were regenerated a
 
 ## CORRECTED EMAIL — AlBaraa → Dr. Yazeed (numbers reconciled to `eval_deployed.json`)
 
-> ⚠ Before sending: drop in the tomato20k citation.
+> **Status (see `EMAIL_LOG.md` for the live tracker):** Dr. Yazeed already **replied and
+> approved on 2026-05-27**, so this corrected follow-up is **ON HOLD** — preserved here as a
+> drafting record, not queued to send. If it is ever sent, drop in the tomato20k citation first.
 
 > Dear Dr. Yazeed,
 >

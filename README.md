@@ -1,9 +1,10 @@
 # TomatoCare
 
 A fully offline, bilingual (English / Arabic) Android app that diagnoses
-tomato leaf diseases on-device using a MobileNetV3-Large TFLite model.
+tomato leaf diseases on-device using a 3-stage MobileNetV3 TFLite cascade
+(leaf gate → tomato gate → 11-class disease classifier).
 
-**Model accuracy: 95.60% — Model size: 5.75 MB — Min Android: API 26 — Zero network calls**
+**Disease accuracy: 97.59% (lab) · 77.2% (field) — Model size: 9.87 MB — Min Android: API 26 — Zero network calls**
 
 ---
 
@@ -25,9 +26,11 @@ TomatoCare helps farmers and agronomists identify tomato leaf diseases instantly
 without requiring internet access. It runs entirely on the device:
 
 - **Captures** a photo via CameraX or imports from gallery
-- **Classifies** it into 1 of 10 conditions (9 diseases + healthy)
-- **Displays** English and Arabic names, confidence score, biotic/abiotic stress
-  badge, Low/Medium/High/Critical severity, and treatment advice
+- **Gates** the image through a leaf check and a tomato check, rejecting
+  non-leaf and non-tomato inputs before any diagnosis
+- **Classifies** it into 1 of 11 conditions (10 diseases + healthy)
+- **Displays** English and Arabic names, confidence score,
+  Low/Medium/High/Critical severity badge, and treatment advice
 - **Filters** treatments by growing method: Greenhouse, Open Field, Hydroponic,
   or Saline Soil (UAE-specific growing contexts)
 - **Warns** when confidence < 60% instead of showing a low-quality guess
@@ -43,8 +46,10 @@ operation are hard guarantees, not configuration options.
 
 | Metric | Value | Target |
 |---|---|---|
-| Test-set accuracy | **95.60%** | ≥ 90% |
-| Model file size | **5.75 MB** (float16) | ≤ 15 MB |
+| Disease accuracy (held-out lab test, n=6,683) | **97.59%** | ≥ 90% |
+| End-to-end accuracy (lab) | **97.19%** | — |
+| Field accuracy (PlantDoc, n=79) | **77.2%** | — |
+| Model size (3-stage cascade, float16) | **9.87 MB** (1.92 + 1.92 + 6.03) | ≤ 15 MB |
 | Release APK size | **38.51 MB** | ≤ 50 MB |
 | Confidence threshold | **0.60** | — |
 | Min Android API | **26** (Android 8.0) | — |
@@ -66,7 +71,7 @@ TomatoCare/
 │   │   └── splits/                 # train.csv / val.csv / test.csv
 │   ├── models/
 │   │   ├── checkpoints/            # stage1_best.keras, stage2_best.keras (gitignored)
-│   │   └── tflite/                 # tomatocare_model_float16.tflite (deployment artifact)
+│   │   └── tflite/                 # stage1/stage2/stage3 float16 TFLite (3-stage cascade)
 │   ├── results/                    # eval_report.json, confusion_matrix.png, etc.
 │   ├── scripts/                    # A2..A8 pipeline scripts
 │   └── utils/                      # dataset_loader.py, model_factory.py, seed.py
@@ -74,7 +79,9 @@ TomatoCare/
 ├── android/                        # Track B — Android app (Kotlin / Jetpack Compose)
 │   ├── app/src/main/
 │   │   ├── assets/
-│   │   │   ├── tomatocare_model_float16.tflite   # 5.75 MB, mmap'd at runtime
+│   │   │   ├── stage1_leaf_float16.tflite        # 1.92 MB — leaf gate
+│   │   │   ├── stage2_tomato_float16.tflite      # 1.92 MB — tomato gate
+│   │   │   ├── stage3_disease_float16.tflite     # 6.03 MB — 11-class classifier
 │   │   │   └── treatments.json                   # 32 KB treatment database
 │   │   ├── kotlin/com/tomatocare/
 │   │   │   ├── data/               # models, enums, storage, repository
@@ -149,6 +156,7 @@ cd android
 
 | Document | Audience | What it covers |
 |---|---|---|
+| [reports/](reports/) | Everyone / Examiner | **Capstone report** (`FINAL_REPORT_REVISED.md`) + audit/viva pack, email log, reconciliation changelog, and project-journey provenance. Start at `reports/README.md`. |
 | [docs/getting-started.md](docs/getting-started.md) | Everyone | Prerequisites, clone, first build for both tracks |
 | [docs/architecture.md](docs/architecture.md) | Everyone | System design, data flow, component diagram, key decisions |
 | [docs/ml-pipeline.md](docs/ml-pipeline.md) | ML / QA | Stages A2–A8, config reference, training, evaluation, export |
@@ -163,7 +171,7 @@ cd android
 
 | Name | Student ID | Role |
 |---|---|---|
-| AlBaraa AlOlabi | 202210405 | CV Engineer — dataset prep, MobileNetV3-Large training, evaluation, TFLite export |
+| AlBaraa AlOlabi | 202210405 | CV Engineer — dataset prep, 3-stage MobileNetV3 cascade training, calibration, evaluation, TFLite export |
 | Ahmed Saeed Ahmed Mohamed | 202211615 | Android Developer (UI/UX) — Compose screens, RTL layout, bilingual toggle |
 | Kazi Mahir Al Wafi | 202211829 | Android Developer (Backend) — CameraX, preprocessing, TFLite engine, JSON storage |
 | Iyad El Boussi | 202111261 | System Architect & Docs — requirements, UML, design, report |

@@ -118,7 +118,7 @@ The training scripts support two dataset modes — choose the one that fits your
 
 **Mode A — pre-split (preferred):**
 
-If you have access to the team's pre-split dataset (32,653 images, 10 classes):
+If you have access to the team's pre-split dataset (11 classes: 10 diseases + healthy):
 
 1. Copy or symlink the folder so it has this structure:
    ```
@@ -126,7 +126,7 @@ If you have access to the team's pre-split dataset (32,653 images, 10 classes):
    ├── train/
    │   ├── Tomato_Bacterial_spot/
    │   ├── Tomato_Early_blight/
-   │   └── ... (10 class folders)
+   │   └── ... (11 class folders — 10 diseases + healthy)
    ├── val/
    └── test/
    ```
@@ -154,12 +154,11 @@ Scripts must be run as modules from the repo root (not from inside `ml/`):
 ```bash
 # From repo root with venv active:
 python -m ml.scripts.prepare_plantvillage   # A2 — inventory + CSV split
-python -m ml.scripts.augment_uae            # A3 — UAE-domain augmentation (4x)
-python -m ml.scripts.train_stage1           # A5 — head-only training
+python -m ml.scripts.train_stage1           # A5 — head-only training (per cascade stage)
 python -m ml.scripts.train_stage2           # A6 — fine-tune top 30 layers
-python -m ml.scripts.calibrate_temperature  # A6.5 — temperature scaling calibration
+python -m ml.scripts.calibrate_temperature  # A6.5 — temperature scaling (T=0.5889)
 python -m ml.scripts.eval_model             # A7 — evaluation (exits 1 if gates fail)
-python -m ml.scripts.export_tflite          # A8 — float16 TFLite export
+python -m ml.scripts.export_tflite          # A8 — float16 TFLite export (3 models)
 ```
 
 Each script is **cached**: if the output artifact already exists it skips work
@@ -168,17 +167,21 @@ and loads the cached result. Delete the artifact to force a re-run:
 | Script | Artifact to delete for re-run |
 |---|---|
 | prepare_plantvillage | `ml/dataset/splits/*.csv` |
-| augment_uae | `ml/dataset/augmented/` |
 | train_stage1 | `ml/models/checkpoints/stage1_best.keras` |
 | train_stage2 | `ml/models/checkpoints/stage2_best.keras` |
 | calibrate_temperature | `ml/models/checkpoints/stage2_calibrated.keras` |
 | eval_model | `ml/results/eval_report.json` |
-| export_tflite | `ml/models/tflite/tomatocare_model_float16.tflite` |
+| export_tflite | `ml/models/tflite/stage{1,2,3}_*_float16.tflite` |
 
-### 6. Copy the model to the Android app
+### 6. Copy the models to the Android app
+
+The deployed system is a 3-stage cascade (leaf gate, tomato gate, disease
+classifier). Copy all three TFLite files:
 
 ```bash
-cp ml/models/tflite/tomatocare_model_float16.tflite \
+cp ml/models/tflite/stage1_leaf_float16.tflite \
+   ml/models/tflite/stage2_tomato_float16.tflite \
+   ml/models/tflite/stage3_disease_float16.tflite \
    android/app/src/main/assets/
 ```
 
@@ -197,14 +200,16 @@ cp ml/models/tflite/tomatocare_model_float16.tflite \
 
 ### 2. Verify the model asset is present
 
-Check that the TFLite model exists before building:
+Check that the three TFLite cascade models exist before building:
 
 ```bash
-ls android/app/src/main/assets/tomatocare_model_float16.tflite
+ls android/app/src/main/assets/stage1_leaf_float16.tflite \
+   android/app/src/main/assets/stage2_tomato_float16.tflite \
+   android/app/src/main/assets/stage3_disease_float16.tflite
 ```
 
-If it is missing, either copy it from `ml/models/tflite/` (after running the ML
-pipeline) or ask a team member who has the trained model for the file.
+If any are missing, copy them from `ml/models/tflite/` (after running the ML
+pipeline) or ask a team member who has the trained models.
 
 ### 3. Build from command line
 
@@ -245,7 +250,7 @@ inference.
 # Quick smoke-test: load the exported model and run one inference
 python - <<'EOF'
 import numpy as np, tensorflow as tf
-interp = tf.lite.Interpreter("ml/models/tflite/tomatocare_model_float16.tflite")
+interp = tf.lite.Interpreter("ml/models/tflite/stage3_disease_float16.tflite")
 interp.allocate_tensors()
 inp = interp.get_input_details()[0]
 out = interp.get_output_details()[0]
@@ -313,8 +318,9 @@ org.gradle.java.home=/path/to/your/jbr
 Or delete the line from `gradle.properties` entirely — Gradle will fall back
 to your system `JAVA_HOME`.
 
-### Android: `tomatocare_model_float16.tflite` missing at build time
+### Android: TFLite model files missing at build time
 
-The TFLite model is not committed to git (it is a binary artifact). Copy it
-from `ml/models/tflite/` after running the ML pipeline, or ask a team member
-for the file.
+The three TFLite cascade models (`stage1_leaf_float16.tflite`,
+`stage2_tomato_float16.tflite`, `stage3_disease_float16.tflite`) are not
+committed to git (binary artifacts). Copy them from `ml/models/tflite/` after
+running the ML pipeline, or ask a team member for the files.

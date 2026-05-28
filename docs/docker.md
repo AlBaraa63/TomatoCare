@@ -77,9 +77,9 @@ docker compose run --rm ml python -m ml.scripts.export_tflite
 # Run the full pipeline in sequence
 docker compose run --rm ml bash -c "
   python -m ml.scripts.prepare_plantvillage &&
-  python -m ml.scripts.augment_uae &&
   python -m ml.scripts.train_stage1 &&
   python -m ml.scripts.train_stage2 &&
+  python -m ml.scripts.calibrate_temperature &&
   python -m ml.scripts.eval_model &&
   python -m ml.scripts.export_tflite
 "

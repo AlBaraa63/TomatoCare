@@ -1,22 +1,26 @@
 # ML Pipeline
 
 This document is the complete reference for the TomatoCare ML pipeline (Track A).
-It covers every stage from raw images to a production-ready TFLite model.
+It covers every stage from raw images to the production-ready 3-stage TFLite
+cascade.
+
+> **Updated 2026-05-28** to reflect the **deployed cascade** architecture.
+> Metrics are sourced from `reports/eval_deployed.json` (single source of truth).
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Configuration](#configuration)
-3. [Stage A2 — Data preparation](#stage-a2--data-preparation)
-4. [Stage A3 — UAE-domain augmentation](#stage-a3--uae-domain-augmentation)
-5. [Stage A5 — Stage-1 training (head only)](#stage-a5--stage-1-training-head-only)
-6. [Stage A6 — Stage-2 training (fine-tune)](#stage-a6--stage-2-training-fine-tune)
-7. [Stage A7 — Evaluation](#stage-a7--evaluation)
-8. [Stage A8 — TFLite export](#stage-a8--tflite-export)
-9. [Model architecture](#model-architecture)
-10. [Class list](#class-list)
+2. [Deployed architecture — 3-stage cascade](#deployed-architecture--3-stage-cascade)
+3. [Configuration](#configuration)
+4. [Stage A2 — Data preparation](#stage-a2--data-preparation)
+5. [Augmentation — deployed vs experimental](#augmentation--deployed-vs-experimental)
+6. [Training — two-phase per model](#training--two-phase-per-model)
+7. [Temperature calibration](#temperature-calibration)
+8. [Stage A7 — Evaluation](#stage-a7--evaluation)
+9. [Stage A8 — TFLite export](#stage-a8--tflite-export)
+10. [Class list (deployed)](#class-list-deployed)
 11. [Results summary](#results-summary)
 12. [Utilities reference](#utilities-reference)
 13. [Re-running specific stages](#re-running-specific-stages)
@@ -25,26 +29,51 @@ It covers every stage from raw images to a production-ready TFLite model.
 
 ## Overview
 
-The pipeline is a linear sequence of six Python scripts. Each script reads
-hyperparameters exclusively from `ml/configs/training_config.yaml` — values
-are never duplicated into script files. Every script caches its output: if the
-output artifact already exists it skips processing and loads the cached result.
+The pipeline produces a **3-stage TFLite cascade** (leaf gate → tomato gate →
+11-class disease classifier). Each script reads hyperparameters from
+`ml/configs/training_config.yaml` and caches its output — if the artifact
+already exists it skips processing.
 
 ```
-A2 → A3 → A5 → A6 → A6.5 → A7 → A8
+A2 → Train (×3 stages) → A6.5 → A7 → A8
 ```
 
 Run all stages in order from the **repo root** (not from inside `ml/`):
 
 ```bash
 python -m ml.scripts.prepare_plantvillage
-python -m ml.scripts.augment_uae
 python -m ml.scripts.train_stage1
 python -m ml.scripts.train_stage2
 python -m ml.scripts.calibrate_temperature
 python -m ml.scripts.eval_model
 python -m ml.scripts.export_tflite
 ```
+
+---
+
+## Deployed architecture — 3-stage cascade
+
+The deployed model is NOT a single classifier. It is a three-stage cascade
+where each stage is a separate MobileNetV3 model:
+
+| Stage | Model | Purpose | Size |
+|-------|-------|---------|------|
+| 1 — Leaf gate | MobileNetV3-Small | Reject non-leaf images (e.g. sky, hand, table) | 1.92 MB |
+| 2 — Tomato gate | MobileNetV3-Small | Reject non-tomato leaves (e.g. rose, basil) | 1.92 MB |
+| 3 — Disease classifier | MobileNetV3-Large | Classify into 11 classes (10 diseases + healthy) | 6.03 MB |
+| **Total** | | | **9.87 MB** |
+
+**Why a cascade?** The earlier v1 prototype used a single MobileNetV3-Large with
+a `not_tomato` reject class. This failed: non-tomato inputs were silently
+labeled as diseases with high confidence. The cascade solves this — each gate
+has a dedicated rejection objective, and hard-rejects before the disease
+classifier ever runs. See the master report (`reports/FINAL_REPORT_REVISED.md`,
+§1.4 and §3.8.3) for the full evolution story.
+
+**Gate safety metrics:**
+- Non-leaf rejection: 99.55%
+- Non-tomato-leaf rejection: 99.37%
+- Cross-species leak: 0.05%
 
 ---
 
@@ -106,9 +135,8 @@ class_weights:
   mode: balanced
 ```
 
-`balanced` computes `n_samples / (n_classes × count_c)` per class. Without
-this the `Tomato_NotALeaf` class (~8,000 samples) would dominate the loss over
-smaller tomato disease classes (~2,500 samples each).
+`balanced` computes `n_samples / (n_classes × count_c)` per class. This
+prevents larger classes from dominating the loss over smaller disease classes.
 
 ### Inference gates
 
@@ -176,76 +204,49 @@ Split sizes: **train 25,100 / val 3,988 / test 3,565** (stratified, seed=42).
 
 ---
 
-## Stage A3 — UAE-domain augmentation
+## Augmentation — deployed vs experimental
 
-**Script:** `ml/scripts/augment_uae.py`
-**Input:** `ml/dataset/splits/train.csv` + raw images
-**Output:** `ml/dataset/augmented/train/`, `val/`, `test/`
-**Cached by:** existence of the `augmented/train/` directory
+### Deployed model: minimal (flip-only)
 
-### Why augment offline?
+The **deployed** cascade uses horizontal-flip-only augmentation. This is the
+`ctrl` (control) configuration that produced the authoritative evaluation
+numbers in `reports/eval_deployed.json`.
 
-Applying augmentation offline (before training) rather than on-the-fly means:
-- Augmented images are saved to disk — the training loop reads them as regular images
-- The augmentation pipeline is decoupled from the TF graph
-- `augmentations_per_image: 3` multiplies the training set ~4× (100k+ images)
+### Experimental: heavy field-simulation augmentation (REJECTED)
 
-### Two augmentation stacks
+A heavy augmentation stack (rotation, zoom, JPEG compression, motion blur,
+perspective warp, cutout, brightness/contrast variation) was tested as
+Experiment 1 in the master report (Ch 7). It was designed to simulate
+real-world phone-camera conditions.
 
-**Stack 1 — UAE-domain (tomato classes only):**
+**Result: field accuracy dropped by 11.4 percentage points** (77.2% → 65.8%).
+The heavy augmentation was rejected. The finding — together with three other
+negative experiments — triangulated that **leaf appearance, not background,
+dominates the lab-to-field domain gap**. Synthetic transforms cannot close it;
+real field data (via the in-app feedback flywheel) is the planned path forward.
 
-Mimics conditions in UAE agricultural fields: intense sunlight, dust haze, heat
-shimmer.
+A separate lighting-only augmentation (brightness/contrast variation) was also
+tested: it maintained lab accuracy (~97.9%) but reduced field accuracy by 3.8
+percentage points (77.2% → 73.4%). Also rejected for the deployed model.
 
-| Parameter | Range |
-|---|---|
-| Brightness | 0.6–1.4× |
-| Contrast | 0.7–1.3× |
-| Red-channel shift | +10..+25 (simulates warm dust haze) |
-| Gaussian blur σ | 0.0–1.5 (heat shimmer) |
-
-Applied **only to tomato classes** — adding orange haze to a photo of a dog
-(Tomato_NotALeaf class) would be incorrect.
-
-**Stack 2 — real-world phone-shot (all classes):**
-
-PlantVillage images are lab photos with uniform backgrounds. This stack makes
-the model robust to how farmers actually take photos: shaky hands, JPEG
-compression, exposure variation.
-
-| Parameter | Value |
-|---|---|
-| Rotation | ±30° |
-| Horizontal flip | 50% probability |
-| Vertical flip | 20% probability |
-| Zoom | ±20% |
-| JPEG quality | 30–80 (compression artifacts) |
-| Motion blur kernel | up to 7×7 |
-| Gamma | 0.7–1.4 |
-| Gaussian noise std | 0–6 |
-| Perspective warp | 40% probability, strength 0.06 |
-| Random crop offset | up to 15% of image size |
-| Cutout | 30% probability, up to 56×56 px patch |
-
-**Val/test light augmentation:**
-
-Val and test sets receive a much lighter version (JPEG quality 50–90 + mild
-gamma only) so that evaluation numbers reflect realistic inference conditions
-without inflating them with clean lab images.
+> **Note:** the `augment_uae.py` script still exists in `ml/scripts/` as a
+> historical artifact. It is NOT part of the deployed training pipeline.
 
 ---
 
-## Stage A5 — Stage-1 training (head only)
+## Training — two-phase per model
+
+Each of the three cascade models is trained using the same two-phase strategy.
+The disease classifier (Stage 3, MobileNetV3-Large) is documented here; the
+two gates (MobileNetV3-Small) follow the same approach with their own datasets.
+
+### Phase 1 — head-only (A5)
 
 **Script:** `ml/scripts/train_stage1.py`
-**Input:** `ml/dataset/augmented/train/` + `splits/val.csv`
 **Output:** `ml/models/checkpoints/stage1_best.keras`
-**Cached by:** existence of `stage1_best.keras`
 
-### What happens
-
-1. Load augmented training data using `dataset_loader.build_train_dataset()`.
-2. Compute per-class weights using `sklearn.utils.class_weight.compute_class_weight('balanced')`.
+1. Load training data using `dataset_loader.build_train_dataset()`.
+2. Compute per-class weights (`balanced` mode).
 3. Build the model via `model_factory.build_model()` — base frozen, head trainable.
 4. Compile:
    ```python
@@ -256,70 +257,79 @@ without inflating them with clean lab images.
 5. Train with callbacks:
    - `EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)`
    - `ModelCheckpoint(save_best_only=True)` → `stage1_best.keras`
-6. Save `results/results_stage1.json` with training history and best metrics.
 
----
-
-## Stage A6 — Stage-2 training (fine-tune)
+### Phase 2 — fine-tune (A6)
 
 **Script:** `ml/scripts/train_stage2.py`
-**Input:** `stage1_best.keras` + `augmented/train/` + `splits/val.csv`
 **Output:** `ml/models/checkpoints/stage2_best.keras`
-**Cached by:** existence of `stage2_best.keras`
-
-### What happens
 
 1. Load `stage1_best.keras`.
 2. Call `model_factory.unfreeze_top_layers(model, fine_tune_from_layer=-30)`:
    - Sets `base.trainable = True`
    - Re-freezes all layers **except** the last 30
    - Keeps BatchNorm layers in inference mode for the frozen portion
-3. Recompile at lower learning rate:
-   ```python
-   optimizer = Adam(learning_rate=config['stage2_lr'])  # 0.0001
-   ```
-4. Train with:
-   - `EarlyStopping(patience=3)` — tighter than Stage 1
-   - `ModelCheckpoint` → `stage2_best.keras`
-5. Save `results/results_stage2.json`.
+3. Recompile at lower learning rate (LR=1e-4).
+4. Train with `EarlyStopping(patience=3)`.
 
-### Why two stages?
+### Why two phases?
 
 Fine-tuning the whole network from the start destroys ImageNet pretrained
-features (catastrophic forgetting) if the learning rate is not carefully tuned.
-Stage 1 first trains a good classification head. Stage 2 then nudges the top
-of the base with a much lower LR, adapting high-level features to tomato leaf
-textures while preserving low-level edge detectors.
+features (catastrophic forgetting). Phase 1 first trains a good classification
+head. Phase 2 then nudges the top of the base with a much lower LR, adapting
+high-level features to tomato leaf textures while preserving low-level edge
+detectors.
+
+---
+
+## Temperature calibration
+
+**Script:** `ml/scripts/calibrate_temperature.py`
+**Input:** `stage2_best.keras` + val split
+**Output:** `stage2_calibrated.keras` (temperature-scaled Stage 3 only)
+
+Temperature scaling (Guo et al. 2017) learns a single scalar T that divides the
+logits before softmax. This does not change the argmax (accuracy is preserved)
+but compresses overconfident predictions, making the 60% confidence threshold
+statistically meaningful.
+
+| Parameter | Value |
+|---|---|
+| Temperature T | **0.5889** |
+| ECE (in-sample val split) | 0.0046 |
+| ECE (held-out test, n=6,683) | **0.061** |
+
+The held-out test ECE (0.061) is the honest deployed figure. The in-sample
+0.0046 is on the same data used to fit T and is NOT reported as the model's
+calibration quality.
 
 ---
 
 ## Stage A7 — Evaluation
 
-**Script:** `ml/scripts/eval_model.py`
-**Input:** `stage2_best.keras` + `splits/test.csv`
-**Output:** `ml/results/eval_report.json`, `ml/results/confusion_matrix.png`
-**Cached by:** existence of `eval_report.json`
+**Script:** `ml/scripts/eval_model.py` (pipeline); `ml/tree/eval_deployed_tflite.py` (deployed cascade)
+**Input:** 3 TFLite models + held-out test set (n=6,683)
+**Output:** `ml/reports/eval_deployed.json`, `ml/reports/confusion_matrix_deployed.png`
 
 ### Metrics computed
 
-**Classification:**
-- Overall accuracy
-- Per-class precision, recall, F1 (classification report)
-- Macro-averaged F1
-- 10×10 confusion matrix (saved as PNG heatmap via seaborn)
+**Classification (disease classifier, Stage 3):**
+- Disease accuracy (97.59%)
+- Per-class recall (11 classes)
+- 11×11 confusion matrix (saved as PNG heatmap)
+
+**End-to-end (full cascade):**
+- Passed leaf gate: 100.0%
+- Passed both gates: 99.42%
+- Correct diagnosis given passed both gates: **97.19%** (end-to-end)
 
 **Calibration:**
-- ECE (Expected Calibration Error)
-- Brier score
-- The calibrated model (`stage2_calibrated.keras`) is saved after temperature
-  scaling if the calibration step runs before evaluation.
+- ECE (Expected Calibration Error, 15-bin): 0.061 held-out test
+- Temperature T: 0.5889
 
-**OOD (Out-of-Distribution / Tomato_NotALeaf):**
-- NotALeaf recall — fraction of non-tomato images correctly rejected
-- False-reject rate — fraction of real tomato leaves incorrectly rejected
-- AUROC on the NotALeaf vs. rest binary problem
-- FPR @ 95% TPR
-- 20 hardest failures dumped to `ml/results/ood_failures/`
+**Field evaluation (PlantDoc, n=79):**
+- Field end-to-end: **77.2%**
+- Field disease accuracy: 87.1%
+- Laboratory-to-field gap: ~20 percentage points
 
 ### Hard gates
 
@@ -327,8 +337,6 @@ The script exits with code 1 if any of these fail:
 
 ```
 overall_accuracy    >= target_accuracy      (0.90)
-notaleaf_recall     >= notaleaf_min_recall  (0.80)
-false_reject_rate   <= max_false_reject_rate (0.15)
 ```
 
 This means `export_tflite` (A8) will never run on a model that doesn't meet
@@ -339,11 +347,11 @@ the minimum bar.
 ## Stage A8 — TFLite export
 
 **Script:** `ml/scripts/export_tflite.py`
-**Input:** `stage2_best.keras` (or `stage2_calibrated.keras` if present)
-**Output:** `ml/models/tflite/tomatocare_model_float16.tflite`
-**Cached by:** existence of the `.tflite` file
+**Input:** calibrated Keras models (×3)
+**Output:** 3 float16 TFLite files
+**Cached by:** existence of the `.tflite` files
 
-### Conversion process
+### Conversion process (per model)
 
 ```python
 converter = tf.lite.TFLiteConverter.from_keras_model(model)
@@ -355,37 +363,50 @@ tflite_model = converter.convert()
 Float16 is chosen over INT8 because:
 - INT8 drops 2–4% per-class accuracy on this dataset
 - Float16 drops < 0.5%
-- Both achieve the ≤ 15 MB size target (float16: 5.75 MB vs float32: ~13 MB)
+- The 3-model cascade totals **9.87 MB** in float16 — well under the 15 MB budget
+
+### Exported files
+
+| File | Model | Size |
+|------|-------|------|
+| `stage1_leaf_float16.tflite` | MobileNetV3-Small leaf gate | 1.92 MB |
+| `stage2_tomato_float16.tflite` | MobileNetV3-Small tomato gate | 1.92 MB |
+| `stage3_disease_float16.tflite` | MobileNetV3-Large disease classifier | 6.03 MB |
+| **Total** | | **9.87 MB** |
 
 ### Post-export verification
 
-1. **Size gate:** file size ≤ `tflite_max_size_mb` (15 MB)
-2. **Shape gate:** input `[1, 224, 224, 3]` float32, output `[1, 11]` float32
+1. **Size gate:** total ≤ `tflite_max_size_mb` (15 MB)
+2. **Shape gate:** input `[1, 224, 224, 3]` float32; Stage 3 output `[1, 11]` float32
 3. **Accuracy gate:** re-run test set with the TFLite interpreter; warn if drop > 1%
-   compared to the Keras model accuracy
 
 ### Deploying to Android
 
 ```bash
-cp ml/models/tflite/tomatocare_model_float16.tflite \
+cp ml/models/tflite/stage1_leaf_float16.tflite \
+   ml/models/tflite/stage2_tomato_float16.tflite \
+   ml/models/tflite/stage3_disease_float16.tflite \
    android/app/src/main/assets/
 ```
 
 ---
 
-## Model architecture
+## Model architecture (Stage 3 — disease classifier)
+
+The gates (Stages 1–2) use MobileNetV3-Small with the same head pattern but
+only 2 output classes each (leaf/not-leaf, tomato/not-tomato).
 
 ```
 Input: (224, 224, 3) float32, values in [0.0, 1.0]
     │
     ▼
-Rescaling(scale=2.0, offset=-1.0)    → values in [-1.0, 1.0]  (matches ImageNet normalization)
+Rescaling(scale=2.0, offset=-1.0)    → values in [-1.0, 1.0]  (ImageNet normalization)
     │
     ▼
 MobileNetV3-Large (ImageNet pretrained, include_preprocessing=False)
     ├── ~280 layers
-    ├── Stage 1: all frozen
-    └── Stage 2: last 30 layers unfrozen
+    ├── Phase 1: all frozen
+    └── Phase 2: last 30 layers unfrozen
     │
     ▼
 GlobalAveragePooling2D
@@ -394,58 +415,58 @@ GlobalAveragePooling2D
 Dropout(0.4)
     │
     ▼
-Dense(11, activation='softmax')
+Dense(11, activation='softmax')   ← temperature-scaled (T=0.5889)
     │
     ▼
-Output: (11,) float32 — probability distribution over 11 classes (10 diseases + 1 OOD reject class)
+Output: (11,) float32 — probability distribution over 11 classes (10 diseases + healthy)
 ```
 
-**Parameter count (approximate):**
-- MobileNetV3-Large base: ~4.2 M parameters
-- Classification head: ~14,000 parameters
-- Total: ~4.2 M parameters
-
-**Quantized model:** 5.75 MB float16 (half precision, ~2.1 M effective 16-bit values)
+**Quantized:** 6.03 MB float16 (Stage 3). Total cascade: 9.87 MB.
 
 ---
 
-## Class list
+## Class list (deployed)
 
-Class indices are fixed. The order is **alphabetical** — this is the order
-TF Keras assigns when using `image_dataset_from_directory` with `class_names`
-pinned. New classes must always be **appended** (never inserted) to avoid
-breaking existing model weights.
+The **deployed** disease classifier (Stage 3) has **11 classes** — 10 tomato
+diseases + healthy. Class indices are alphabetical (the order TF Keras assigns
+via `image_dataset_from_directory`). This matches `reports/eval_deployed.json`.
 
-| Index | Class name | Stress type |
+| Index | Class name | Note |
 |---|---|---|
-| 0 | Tomato_Bacterial_spot | Biotic |
-| 1 | Tomato_Early_blight | Biotic |
-| 2 | Tomato_healthy | — |
-| 3 | Tomato_Late_blight | Biotic |
-| 4 | Tomato_Leaf_Mold | Biotic |
-| 5 | Tomato_Septoria_leaf_spot | Biotic |
-| 6 | Tomato_Spider_mites_Two_spotted_spider_mite | Biotic |
-| 7 | Tomato_Target_Spot | Biotic |
-| 8 | Tomato_Yellow_Leaf_Curl_Virus | Biotic |
-| 9 | Tomato_mosaic_virus | Biotic |
-| 10 | Tomato_NotALeaf | OOD (out-of-distribution) |
+| 0 | bacterial_spot | |
+| 1 | early_blight | weakest: recall 0.943 |
+| 2 | healthy | |
+| 3 | late_blight | |
+| 4 | leaf_mold | |
+| 5 | mosaic_virus | |
+| 6 | powdery_mildew | perfect: recall 1.000 |
+| 7 | septoria_leaf_spot | second weakest: recall 0.957 |
+| 8 | spider_mites | |
+| 9 | target_spot | |
+| 10 | yellow_leaf_curl_virus | |
 
-> **Note:** `Tomato_NotALeaf` (index 10) is the OOD reject class. It is included in `TomatoClasses.CLASS_NAMES` on the Android side as index 10. When the top-1 probability lands on index 10, the inference engine treats it as out-of-distribution, routing the result through the low-confidence warning UI.
+> **Note:** OOD rejection is handled by the cascade gates (Stages 1–2), not by
+> a reject class in Stage 3. The old `Tomato_NotALeaf` class from the v1
+> prototype is no longer part of the deployed model.
 
 ---
 
 ## Results summary
 
-Achieved on the held-out test set (3,565 images, never seen during training or
-validation):
+All numbers sourced from `reports/eval_deployed.json` — the single source of truth.
 
 | Metric | Value |
 |---|---|
-| Overall accuracy | **95.60%** |
-| Macro F1 | **0.9541** |
+| Disease accuracy (lab, n=6,683) | **97.59%** |
+| End-to-end accuracy (lab) | **97.19%** |
+| Field accuracy (PlantDoc, n=79) | **77.2%** |
+| ECE (held-out test, 15-bin) | **0.061** |
+| Temperature T | 0.5889 |
+| Model size (cascade total) | **9.87 MB** (1.92 + 1.92 + 6.03) |
+| Weakest recalls | early_blight 0.943, septoria 0.957 |
+| Gate safety (non-leaf reject) | 99.55% |
 | Confidence threshold (app) | 0.60 |
-| Model file size | 5.75 MB (float16 TFLite) |
-| Training baseline (PyTorch CNN) | 91.17% |
+| Training baseline (from-scratch TomatoCareNet) | 91.17% |
 
 ---
 
@@ -492,23 +513,17 @@ will also need their artifacts deleted if their inputs have changed.
 
 ```bash
 # Re-run only evaluation (useful for checking a new model without retraining)
-rm ml/results/eval_report.json
+rm ml/reports/eval_deployed.json
 python -m ml.scripts.eval_model
 
-# Re-run training from scratch
+# Re-run training from scratch (disease classifier)
 rm ml/models/checkpoints/stage1_best.keras
 rm ml/models/checkpoints/stage2_best.keras
 rm ml/models/checkpoints/stage2_calibrated.keras
-rm ml/results/eval_report.json
-rm ml/models/tflite/tomatocare_model_float16.tflite
+rm ml/reports/eval_deployed.json
 python -m ml.scripts.train_stage1
 python -m ml.scripts.train_stage2
 python -m ml.scripts.calibrate_temperature
 python -m ml.scripts.eval_model
 python -m ml.scripts.export_tflite
-
-# Re-run augmentation (e.g. after changing augmentation parameters)
-rm -rf ml/dataset/augmented/
-python -m ml.scripts.augment_uae
-# Then re-run training and everything downstream.
 ```

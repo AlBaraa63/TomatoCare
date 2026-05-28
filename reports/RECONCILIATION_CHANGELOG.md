@@ -2,7 +2,10 @@
 
 **Date:** 2026-05-28
 **Source merge:** `C:\Users\POTATO\Desktop\updated report.md` (preserved, untouched)
-**Corrected output:** `ml/reports/FINAL_REPORT_FULL.md`
+**Corrected output (at the time):** `FINAL_REPORT_FULL.md` — now in `archive/`, **superseded** by the
+hand-finished master **`FINAL_REPORT_REVISED.md`** (this folder), which carried forward every
+correction below. This changelog documents *why* those corrections were made; the master report is
+where they now live.
 
 ## Why these changes
 The merged report claimed, in several places, that the system **detects abiotic stress**
@@ -19,8 +22,9 @@ The AI core (Chapter 7) was already correct — its 11×11 confusion matrix matc
 
 > **IMPORTANT for the Word version:** your merge in Word contains the teammate's figures (UML,
 > screenshots) that this Markdown file does not. To keep those figures, apply the changes below
-> **in your Word document** rather than regenerating a docx from the Markdown. The corrected
-> `FINAL_REPORT_FULL.md` is the authoritative text to copy from.
+> **in your Word document** rather than regenerating a docx from the Markdown. The authoritative
+> text to copy from is now **`FINAL_REPORT_REVISED.md`** (this folder); the older
+> `FINAL_REPORT_FULL.md` it was distilled from is preserved in `archive/`.
 
 ---
 

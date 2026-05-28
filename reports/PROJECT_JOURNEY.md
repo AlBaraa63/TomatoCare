@@ -1,3 +1,15 @@
+> **PROVENANCE — v0 first-attempt narrative (PRESERVED VERBATIM).**
+> This is AlBaraa's original, unedited account of the *first ever* TomatoCare attempt: the
+> from-scratch **TomatoCareNet** custom CNN (4 conv blocks + SE attention + global average
+> pooling, ~91.17% held-out accuracy on four merged datasets). It is the provenance behind the
+> three-iteration evolution story now cited in the master report (`FINAL_REPORT_REVISED.md`,
+> §1.4 "The Problem Of" and §3.8.3 "Cascade Architecture"). It predates the single
+> MobileNetV3-Large + `not_tomato` reject prototype (Capstone 1) and the deployed 3-stage cascade.
+> Kept here as a historical record — **the numbers/structure in the master report supersede any
+> figures below.** Body is unchanged from `project journey.txt`.
+
+---
+
 so this is the capstone implementation journey i have started with this idea TomatoCare so basically i know some computer vision so i would like to apply it somewhere so i think this is a good opportunity and seems easy 
 
 so lets start so to break down the idea first do some research to get out some idea how we going to start and the structure the project well. 
@@ -148,11 +160,3 @@ Output Layer: Outputs the probability for each of the 10 classes (diseases).
 by that i did mange to hit ~91.17% and with that i think this is impressive it took me like 5hours straight and consumed my GPU but its worth it for learning and getting things running with my hands while Cluade what backing me up when failing and i would rias my hat for it 
 
 and finally the evaluation here you test the model on unseen data it did well here with the most of the classes and i believe that this is an achievement.
-
-
-
-
-
-
-
-

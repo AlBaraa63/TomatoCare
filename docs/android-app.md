@@ -81,9 +81,9 @@ android {
 }
 ```
 
-The `noCompress` directive is critical: if the `.tflite` is compressed inside
-the APK the OS cannot memory-map it, forcing a full heap allocation (~6 MB) at
-model load time.
+The `noCompress` directive is critical: if the `.tflite` files are compressed
+inside the APK the OS cannot memory-map them, forcing full heap allocations
+(~9.87 MB across the three cascade models) at load time.
 
 ---
 
@@ -209,7 +209,6 @@ data class ResultUiState(
 
 **What it displays:**
 - Primary condition: English name + Arabic name (bilingual)
-- Stress badge (BIOTIC / ABIOTIC)
 - Severity chip (LOW / MEDIUM / HIGH / CRITICAL)
 - Confidence percentage (e.g. "87.3%")
 - **Growing method selector:** radio buttons (Greenhouse / Open Field /
@@ -315,17 +314,19 @@ suspend fun classify(
 ```
 
 **Initialization:**
-- Memory-maps `tomatocare_model_float16.tflite` from the APK's `assets/`
-  directory using `MappedByteBuffer`. No heap allocation.
-- Sets `numThreads = 4` for the TFLite interpreter.
+- Memory-maps three TFLite models from the APK's `assets/` directory:
+  `stage1_leaf_float16.tflite` (1.92 MB), `stage2_tomato_float16.tflite`
+  (1.92 MB), and `stage3_disease_float16.tflite` (6.03 MB). No heap allocation.
+- Sets `numThreads = 4` for each TFLite interpreter.
 
 **Classification steps:**
 1. Delegate to `ImagePreprocessor.preprocess(bitmap)` → `ByteBuffer`.
-2. Set input tensor from `ByteBuffer`.
-3. Call `interpreter.run()`.
-4. Read output tensor: `FloatArray` of size 11 (one probability per class, including Tomato_NotALeaf).
-5. Map each index to `TomatoClasses.CLASS_NAMES[i]`.
-6. Sort descending → take top 3.
+2. **Stage 1 — leaf gate:** run leaf model; reject if not a leaf.
+3. **Stage 2 — tomato gate:** run tomato model; reject if not a tomato leaf.
+4. **Stage 3 — disease classifier:** run disease model.
+5. Read output tensor: `FloatArray` of size 11 (10 diseases + healthy).
+6. Map each index to class name (alphabetical order).
+7. Sort descending → take top 3.
 7. Apply severity heuristic based on the top result's confidence:
 
    | Confidence | Severity adjustment |
@@ -359,29 +360,36 @@ fun preprocess(bitmap: Bitmap): ByteBuffer
 
 **File:** `inference/TomatoClasses.kt`
 
-```kotlin
-const val MODEL_ASSET = "tomatocare_model_float16.tflite"
+The deployed cascade uses three model assets and an 11-class disease label set
+(10 diseases + healthy). OOD rejection is handled by the gate models, not by a
+reject class in the disease classifier.
 
+```kotlin
+// Cascade model assets
+const val STAGE1_ASSET = "stage1_leaf_float16.tflite"     // 1.92 MB — leaf gate
+const val STAGE2_ASSET = "stage2_tomato_float16.tflite"   // 1.92 MB — tomato gate
+const val STAGE3_ASSET = "stage3_disease_float16.tflite"  // 6.03 MB — disease classifier
+
+// Disease classifier class names (Stage 3 output, alphabetical)
 val CLASS_NAMES: List<String> = listOf(
-    "Tomato_Bacterial_spot",                        // 0
-    "Tomato_Early_blight",                          // 1
-    "Tomato_healthy",                               // 2
-    "Tomato_Late_blight",                           // 3
-    "Tomato_Leaf_Mold",                             // 4
-    "Tomato_Septoria_leaf_spot",                    // 5
-    "Tomato_Spider_mites_Two_spotted_spider_mite",  // 6
-    "Tomato_Target_Spot",                           // 7
-    "Tomato_Yellow_Leaf_Curl_Virus",                // 8
-    "Tomato_mosaic_virus",                          // 9
-    "Tomato_NotALeaf",                              // 10 (OOD reject)
+    "bacterial_spot",             // 0
+    "early_blight",               // 1
+    "healthy",                    // 2
+    "late_blight",                // 3
+    "leaf_mold",                  // 4
+    "mosaic_virus",               // 5
+    "powdery_mildew",             // 6
+    "septoria_leaf_spot",         // 7
+    "spider_mites",               // 8
+    "target_spot",                // 9
+    "yellow_leaf_curl_virus",     // 10
 )
 ```
 
 This list is the **contract** between the ML pipeline and the Android app:
-index 0 in the model's output tensor must map to `Tomato_Bacterial_spot`, and
-so on. The order is alphabetical — matching the order TF Keras assigns when
-using `image_dataset_from_directory`. `ClassNamesTest` verifies this at build
-time.
+index 0 in the Stage 3 output tensor must map to `bacterial_spot`, and so on.
+The order is alphabetical — matching `reports/eval_deployed.json`.
+`ClassNamesTest` verifies this at build time.
 
 ---
 
@@ -439,7 +447,7 @@ data class Treatment(
 
 **Enums:**
 ```
-StressType:    BIOTIC | ABIOTIC
+StressType:    BIOTIC | ABIOTIC  (static metadata — NOT a learned prediction)
 SeverityLevel: LOW | MEDIUM | HIGH | CRITICAL
 GrowingMethod: GREENHOUSE | OPEN_FIELD | HYDROPONIC | SALINE_SOIL
 Language:      ENGLISH | ARABIC
@@ -542,9 +550,10 @@ An expandable card for a single treatment recommendation.
 
 **File:** `ui/components/StressBadge.kt`
 
-A small colored chip:
-- `BIOTIC` → green background
-- `ABIOTIC` → amber/orange background
+A small colored chip indicating the condition's stress type. The `stressType`
+field is **static descriptive metadata** carried from the condition record — it
+is NOT a learned prediction. The system does not detect or classify abiotic
+stress; all 10 disease classes are biotic, and "healthy" is neither.
 
 Displayed on the HomeScreen last-scan card, HistoryScreen rows, and
 ResultScreen.

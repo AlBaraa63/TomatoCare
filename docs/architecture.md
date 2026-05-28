@@ -22,35 +22,39 @@ from camera to diagnosis, and the key design decisions that shaped both tracks.
 
 ## System Overview
 
-TomatoCare has two independent tracks that share a single artifact: the TFLite
-model file.
+TomatoCare has two independent tracks that share a set of artifacts: three
+TFLite cascade models (leaf gate, tomato gate, disease classifier).
 
 ```
-┌─────────────────────────────────────────────────┐
-│              Track A — ML Pipeline               │
-│                                                  │
-│  Raw images → Augmentation → Train → Eval        │
-│                                     │            │
-│                              Export .tflite      │
-└─────────────────────────────────────┬────────────┘
-                                      │ copy
-                                      ▼
-                          android/app/src/main/assets/
-                          tomatocare_model_float16.tflite
+┌─────────────────────────────────────────────────────┐
+│               Track A — ML Pipeline                  │
+│                                                      │
+│  Raw images → Prep → Train (×3 stages) → Calibrate  │
+│                                      │               │
+│                     Export 3 × float16 .tflite       │
+│                     (1.92 + 1.92 + 6.03 = 9.87 MB)  │
+└──────────────────────────────────┬───────────────────┘
+                                   │ copy
+                                   ▼
+                       android/app/src/main/assets/
+                       ├── stage1_leaf_float16.tflite
+                       ├── stage2_tomato_float16.tflite
+                       └── stage3_disease_float16.tflite
 
-┌─────────────────────────────────────────────────┐
-│            Track B — Android App                │
-│                                                  │
-│  Camera/Gallery → Preprocess → TFLite infer     │
-│                                      │           │
-│                              ScanRecord → JSON   │
-│                              + Treatment advice  │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│              Track B — Android App                   │
+│                                                      │
+│  Camera/Gallery → Preprocess → Cascade infer         │
+│         (leaf gate → tomato gate → disease dx)       │
+│                                      │               │
+│                              ScanRecord → JSON       │
+│                              + Treatment advice      │
+└─────────────────────────────────────────────────────┘
 ```
 
-The Android app is fully self-contained: the model is bundled inside the APK
-as an uncompressed asset that is memory-mapped at runtime. No server, no API,
-no internet connection of any kind.
+The Android app is fully self-contained: the three models are bundled inside
+the APK as uncompressed assets that are memory-mapped at runtime. No server,
+no API, no internet connection of any kind.
 
 ---
 
@@ -70,49 +74,36 @@ training_config.yaml  (single source of truth for all hyperparameters)
 │                 │  Output: ml/dataset/splits/{train,val,test}.csv
 └────────┬────────┘
          │
-         ▼
-┌─────────────────┐
-│  A3             │  augment_uae.py
-│  Augmentation   │  Input:  train.csv + raw images
-│                 │  Output: ml/dataset/augmented/train/ (4x)
-└────────┬────────┘         ml/dataset/augmented/val/
-         │                  ml/dataset/augmented/test/
-         ▼
-┌─────────────────┐
-│  A5             │  train_stage1.py
-│  Stage-1 train  │  Input:  augmented/train/ + val.csv
-│  (head only)    │  Output: models/checkpoints/stage1_best.keras
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  A6             │  train_stage2.py
-│  Stage-2 train  │  Input:  stage1_best.keras + augmented/train/ + val.csv
-│  (fine-tune)    │  Output: models/checkpoints/stage2_best.keras
-└────────┬────────┘
-         │
-         ▼
+    ┌────┴────┬──────────┐   (repeated per cascade stage)
+    ▼         ▼          ▼
+┌────────┐ ┌────────┐ ┌────────────────┐
+│ Stage 1│ │ Stage 2│ │   Stage 3      │
+│ Leaf   │ │ Tomato │ │   Disease      │
+│ gate   │ │ gate   │ │   classifier   │
+│ Small  │ │ Small  │ │   Large        │
+└────┬───┘ └────┬───┘ └───────┬────────┘
+     │          │             │
+     └──────────┴──────┬──────┘
+                       ▼
 ┌─────────────────┐
 │  A6.5           │  calibrate_temperature.py
-│  Calibration    │  Input:  stage2_best.keras + val.csv
-│                 │  Output: models/checkpoints/stage2_calibrated.keras
+│  Calibration    │  Temperature scaling (T=0.5889) on Stage 3
 └────────┬────────┘
+         ▼
+┌─────────────────┐
+│  A7             │  eval_deployed_tflite.py
+│  Evaluation     │  Input:  3 TFLite models + test set (n=6,683)
+│                 │  Output: reports/eval_deployed.json
+│  Gate: ≥ 90%   │          11×11 confusion matrix
+└────────┬────────┘  Disease acc: 97.59%  |  E2E: 97.19%
          │
          ▼
 ┌─────────────────┐
-│  A7             │  eval_model.py
-│  Evaluation     │  Input:  stage2_calibrated.keras + test.csv
-│                 │  Output: results/eval_report.json
-│  Gate: ≥ 90%   │          results/confusion_matrix.png
-└────────┬────────┘  Exits with code 1 if accuracy/OOD gates fail.
-         │
-         ▼
-┌─────────────────┐
-│  A8             │  export_tflite.py
-│  TFLite export  │  Input:  stage2_calibrated.keras
-│                 │  Output: models/tflite/tomatocare_model_float16.tflite
-│  Gate: ≤ 15 MB  │  Exits with code 1 if size gate fails.
-└─────────────────┘
+│  A8             │  export_tflite.py (×3)
+│  TFLite export  │  Output: stage1_leaf_float16.tflite     (1.92 MB)
+│                 │          stage2_tomato_float16.tflite    (1.92 MB)
+│  Gate: ≤ 15 MB  │          stage3_disease_float16.tflite   (6.03 MB)
+└─────────────────┘  Total: 9.87 MB
 ```
 
 See [ml-pipeline.md](ml-pipeline.md) for detailed documentation of each stage.
@@ -214,10 +205,13 @@ ImagePreprocessor.preprocess(bitmap)
     ▼
 TFLiteEngine.classify(bitmap, growingMethod, threshold)
     ├── Set input tensor ← ByteBuffer from ImagePreprocessor
-    ├── Interpreter.run()
-    │       (MobileNetV3-Large float16, mmap'd, 4 threads)
-    ├── Read output tensor [1 × 11] softmax probabilities
-    ├── Map index → class name (TomatoClasses.CLASS_NAMES, alphabetical)
+    ├── Stage 1: leaf gate (MobileNetV3-Small, 1.92 MB)
+    │       → reject if not a leaf
+    ├── Stage 2: tomato gate (MobileNetV3-Small, 1.92 MB)
+    │       → reject if not a tomato leaf
+    ├── Stage 3: disease classifier (MobileNetV3-Large, 6.03 MB)
+    │       → output [1 × 11] softmax over 10 diseases + healthy
+    ├── Map index → class name (alphabetical)
     ├── Sort descending → top-3 results
     ├── Apply severity heuristic (confidence → severity level)
     │       ≥ 90% → base severity
@@ -258,7 +252,7 @@ ScanHistory
         ├── conditionNameAr: String
         ├── confidence: Double        0.0–1.0
         ├── isPrimary: Boolean        true for the top result only
-        ├── stressType: StressType    BIOTIC | ABIOTIC
+        ├── stressType: StressType    BIOTIC | ABIOTIC (static metadata — NOT a learned prediction)
         ├── severityLevel: SeverityLevel  LOW | MEDIUM | HIGH | CRITICAL
         └── treatments: List<Treatment>
             ├── treatmentId: Int
@@ -286,16 +280,17 @@ makes security reviews trivial — there is no network code to audit.
 ### 2. Float16 quantization over INT8
 
 Post-training INT8 quantization typically drops 2–4% per-class accuracy on this
-dataset. Float16 drops less than 0.5% while cutting model size from ~13 MB
-(float32) to 5.75 MB. The 15 MB size budget is easily met while keeping
-accuracy at 95.60%.
+dataset. Float16 drops less than 0.5% while cutting the 3-model cascade from
+~20 MB (float32) to 9.87 MB total (1.92 + 1.92 + 6.03). The 15 MB size
+budget is met while keeping disease accuracy at 97.59%.
 
-### 3. Memory-mapped TFLite model
+### 3. Memory-mapped TFLite models
 
-The `.tflite` asset is stored uncompressed in the APK (`noCompress += "tflite"`
-in `build.gradle.kts`). The Android linker can then `mmap()` it directly from
-the APK without heap allocation. This means the model never occupies heap memory
-and the OS can evict its pages under memory pressure and reload them as needed.
+All three `.tflite` assets are stored uncompressed in the APK
+(`noCompress += "tflite"` in `build.gradle.kts`). The Android linker can then
+`mmap()` each directly from the APK without heap allocation. This means the
+models never occupy heap memory and the OS can evict their pages under memory
+pressure and reload them as needed.
 
 ### 4. Alphabetical class order as the contract
 
@@ -393,7 +388,7 @@ com.tomatocare/
     │   └── SettingsViewModel.kt
     └── components/
         ├── TreatmentCard.kt        expandable treatment row
-        ├── StressBadge.kt          BIOTIC / ABIOTIC colored chip
+        ├── StressBadge.kt          severity / condition type indicator
         ├── LowConfidenceWarning.kt orange warning with Retake / Show Anyway
         └── SeverityChip.kt         LOW / MEDIUM / HIGH / CRITICAL chip
 ```
