@@ -346,7 +346,7 @@ tense; no number outside the STEP 1 table.
 
 ---
 
-## STEP 7 — Defense Preparation (5 hostile-examiner questions)
+## STEP 7 — Defense Preparation (6 hostile-examiner questions)
 
 **Q1. "Your field accuracy is 77% — is this system actually deployable?"**
 Yes, with honest scope. The safety property — hard-rejecting non-leaf and non-tomato inputs at the
@@ -396,6 +396,26 @@ the gate models (Stages 1–2) were *not* retrained between the baseline and the
 only Stage 3 changed — so the gate behaviour carries over unchanged. We disclose this provenance in a
 footnote and flag re-running the hard-negative suite against a fresh held-out OOD set as the right
 pre-final-submission check. We do not claim those two figures were regenerated against the shipped artifact.
+
+**Q6. "Isn't the lab→field gap just because a disease looks different in different regions — and
+didn't you simulate that UAE variation to handle it?"**
+The first half is exactly our finding; the second half we have to state precisely. Yes — a disease
+presents differently across environments, which is *why* our lab end-to-end accuracy (97.19%) falls
+to 77.2% in the field. We **hypothesised** that simulating that variation would close the gap, and we
+tested it four ways: heavy environmental augmentation (−11.4 pts), lighting augmentation (−3.8 pts),
+DCGAN-synthesised samples (zero gain), and test-time white-background normalisation (−30.4 pts). All
+four failed. The deployed model therefore uses **minimal, flip-only** augmentation — we did **not**
+ship a "UAE-simulation" model and we explicitly do not claim one (that earlier claim was cut during
+reconciliation; see `RECONCILIATION_CHANGELOG.md`). The composited experiment explains why simulation
+fails: a *lab* leaf on a cluttered *field* background still scores 65.5%, but a *field* leaf on a
+clean background drops to 46.8% — so the gap is driven by the leaf's real-world appearance, which
+synthetic transforms cannot manufacture. The honest, evidence-backed conclusion is that this
+variation must be **collected, not simulated** — which is exactly what the in-app feedback flywheel
+does, accumulating real UAE field images with verified labels for retraining. So our contribution was
+not to fake UAE conditions, but to *prove that faking them does not work* and to build the mechanism
+that gathers the real thing. **Trap to avoid:** never assert "we simulated/trained on UAE
+conditions" — the report (Ch 7, §7.5) documents those as failed experiments, and the contradiction
+would undermine the rigorous negative results that are the project's strongest asset.
 
 ---
 

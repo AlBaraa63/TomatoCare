@@ -26,7 +26,7 @@ support, audit, or explain it.
 | **`FINAL_REPORT_REVISED.md`** | **AUTHORITATIVE** | The master capstone report (Ch 1–9 + front matter + references + appendices). Fully reconciled to `eval_deployed.json`; the hand-built `.docx` submission mirrors this text. **This supersedes `archive/FINAL_REPORT_FULL.md`.** |
 | `eval_deployed.json` | **AUTHORITATIVE** (snapshot) | Frozen copy of the deployed-cascade metrics — the single source of truth for every number. The canonical live copy stays in `../ml/reports/`. |
 | `figures/` | **AUTHORITATIVE** (snapshot) | Copies of the three report figures: `confusion_matrix_deployed.png`, `lab_vs_field_accuracy.png`, `gan_samples_epoch150.png`. Canonical copies live in `../ml/reports/`. |
-| `AUDIT_AND_VIVA_PACK.md` | **PROVENANCE** | The control/audit doc: source-of-truth table, full consistency audit (C1–C8 + NEW-1..5), scientific story, **5 hostile-examiner Q&A**, patch/recompute/supervisor logs, and a corrected supervisor email draft. Read this before a viva. |
+| `AUDIT_AND_VIVA_PACK.md` | **PROVENANCE** | The control/audit doc: source-of-truth table, full consistency audit (C1–C8 + NEW-1..5), scientific story, **6 hostile-examiner Q&A**, patch/recompute/supervisor logs, and a corrected supervisor email draft. Read this before a viva. |
 | `RECONCILIATION_CHANGELOG.md` | **PROVENANCE** | Documents *why* the abiotic/UAE-environmental model claims were cut and lists every reconciliation made when distilling the merged super-report into the master. |
 | `EMAIL_LOG.md` | **PROVENANCE** | Single tracker for all project correspondence (who → whom, date, purpose, status, next action). |
 | `PROJECT_JOURNEY.md` | **PROVENANCE** | AlBaraa's original v0 narrative — the first-ever attempt (from-scratch TomatoCareNet, 91.17%). Preserved verbatim with a provenance header. |
@@ -79,6 +79,13 @@ holds the earlier drafts those documents replaced.
 
 For **developer-level** reference (script names, config YAML, Docker, Kotlin code), see `../docs/`:
 `ml-pipeline.md` (ML training stages), `architecture.md` (system design), `android-app.md` (app
-internals), `getting-started.md` (onboarding), `docker.md`, `functional_tests.md` (FR matrix),
-`nfr_verification.md` (NFR sign-off). These were updated 2026-05-28 to match the deployed cascade
-and `eval_deployed.json`.
+internals), `getting-started.md` (onboarding), `docker.md`, `functional_tests.md` (FR-01..FR-28
+matrix), `nfr_verification.md` (NFR sign-off). These were updated 2026-05-29 to match the deployed
+cascade, the current app (Encyclopedia, dark mode, feedback flywheel, dashboard), and
+`eval_deployed.json`.
+
+For **open-source / onboarding**, the repo root carries `../README.md` (overview + model-acquisition
++ CI badge), `../CONTRIBUTING.md` (contributor setup, tests, conventions), and `../CHANGELOG.md`
+(engineering log). The app-level testing story (unit tests + CI) is written up in
+`FINAL_REPORT_REVISED.md` §7.9; on-device functional/integration/system/acceptance results remain the
+QA lead's to record there.

@@ -26,13 +26,13 @@ TomatoCare has two independent tracks that share a set of artifacts: three
 TFLite cascade models (leaf gate, tomato gate, disease classifier).
 
 ```
-┌─────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────┐
 │               Track A — ML Pipeline                  │
 │                                                      │
-│  Raw images → Prep → Train (×3 stages) → Calibrate  │
+│  Raw images → Prep → Train (×3 stages) → Calibrate   │
 │                                      │               │
 │                     Export 3 × float16 .tflite       │
-│                     (1.92 + 1.92 + 6.03 = 9.87 MB)  │
+│                     (1.92 + 1.92 + 6.03 = 9.87 MB)   │
 └──────────────────────────────────┬───────────────────┘
                                    │ copy
                                    ▼
@@ -42,13 +42,13 @@ TFLite cascade models (leaf gate, tomato gate, disease classifier).
                        └── stage3_disease_float16.tflite
 
 ┌─────────────────────────────────────────────────────┐
-│              Track B — Android App                   │
-│                                                      │
-│  Camera/Gallery → Preprocess → Cascade infer         │
-│         (leaf gate → tomato gate → disease dx)       │
-│                                      │               │
-│                              ScanRecord → JSON       │
-│                              + Treatment advice      │
+│              Track B — Android App                  │
+│                                                     │
+│  Camera/Gallery → Preprocess → Cascade infer        │
+│         (leaf gate → tomato gate → disease dx)      │
+│                                      │              │
+│                              ScanRecord → JSON      │
+│                              + Treatment advice     │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -165,27 +165,28 @@ TomatoCareApp
 ### Screen flow
 
 ```
-App launch
-    │
-    ▼
-HomeScreen ──── [Scan a leaf] ──────► ScanScreen
-    │                                     │
-    │           [View history]             │ capture / import
-    │                │                    ▼
-    │           HistoryScreen        (Processing)
-    │                │                    │
-    │           [tap record]         (LowConfidence?) ── [Retake] ──► ScanScreen
-    │                │                    │
-    │                └──────────────► ResultScreen
-    │                                     │
-    │           [Settings]                │ [Back]
-    └────────► SettingsScreen             ▼
-                                      HomeScreen
+              ┌─────────── Bottom navigation bar ───────────┐
+           HomeScreen   ScanScreen   Encyclopedia   History   Settings
+              │             │             │            │         │
+ [tap stat/   │      capture/import       │      [tap record]   │ (theme,
+  last scan]  │             ▼        (browse + search           │  language,
+              │       (Processing)    all conditions)           │  export,
+              │             │                                   │  training,
+              │   (Gate reject?  ── Retake ──► ScanScreen)       │  delete)
+              │   (LowConfidence? ─ Retake ──► ScanScreen)
+              │             │
+              └─────────────┴────────────► ResultScreen ─[feedback]─► flywheel
+                                                │ [Back]
+                                                ▼
+                                            HomeScreen
 ```
 
-Navigation is handled by Compose Navigation with a single `NavController`.
-After a successful scan the back-stack is cleared to `HomeScreen` so pressing
-Back from `ResultScreen` goes home, not back to the camera.
+Navigation is Compose Navigation with one `NavController`. Five destinations
+(Home, Scan, Encyclopedia, History, Settings) live in a **bottom navigation
+bar**; `ResultScreen` is a detail screen pushed on top with the bottom bar
+hidden and its own back arrow. Tab switches use `saveState`/`restoreState` +
+`launchSingleTop`. After a successful scan the back-stack pops to `HomeScreen`,
+so Back from `ResultScreen` goes home, not back to the camera.
 
 ### Inference data flow
 
@@ -245,6 +246,11 @@ ScanHistory
     ├── timestamp: String            ISO-8601 UTC ("2025-05-19T14:30:00Z")
     ├── growingMethod: GrowingMethod  GREENHOUSE | OPEN_FIELD | HYDROPONIC | SALINE_SOIL
     ├── modelVersion: String         "2.0.0"
+    ├── feedback: ScanFeedback?      null until the user answers "was this correct?"
+    │   ├── wasCorrect: Boolean       feedback flywheel — see android-app.md
+    │   ├── correctedConditionId: String?  true class when wasCorrect == false
+    │   └── timestamp: String         ISO-8601 UTC (when feedback was given)
+    ├── inferenceTimeMs: Long?       total cascade time (NFR-02 evidence); shown on Result
     └── results: List<DiagnosisResult>
         ├── resultId: Int
         ├── conditionId: String       stable key for TreatmentRepository lookup
@@ -335,6 +341,30 @@ Using SAF (`ActivityResultContracts.CreateDocument` / `OpenDocument`) means the
 app never needs `READ_EXTERNAL_STORAGE` on API 29+. The user controls where the
 export file lives and the app only ever sees a `Uri` — not raw paths.
 
+### 10. On-device feedback flywheel
+
+The ML evaluation measures a lab→field accuracy gap (97.19% lab vs 77.2% field).
+The plan to close it is real field data, so the app collects it: each scan can
+carry a `ScanFeedback` (user-verified label), and `TrainingDataExporter` bundles
+all feedback-labelled scans into a training-ready ZIP (grouped by true label +
+`manifest.json`). Entirely offline — the user owns and explicitly exports the
+data. This makes the report's gap-closing strategy a working feature, not a
+promise.
+
+### 11. Reactive settings (live theme, restart-free language)
+
+`SettingsStore` exposes a `StateFlow<UserSettings>` (seeded by `read()`, updated
+by `write()`). `MainActivity` collects it: theme switches recompose **live**,
+and a language change triggers `Activity.recreate()` so the new locale is applied
+in `attachBaseContext` before the first frame. A one-shot read here would leave
+the in-app theme/language toggle inert until the next launch.
+
+### 12. JSON settings, not DataStore
+
+Settings persist as a single flat `settings.json` via kotlinx.serialization with
+the same atomic temp-then-rename write as scan history — one serialization stack
+across the app, no DataStore migrations for a single-object preference file.
+
 ---
 
 ## File layout reference
@@ -348,47 +378,55 @@ com.tomatocare/
 │   └── AppContainer.kt       All dependencies wired here; no framework DI
 │
 ├── inference/
-│   ├── TFLiteEngine.kt       loads model, runs inference, applies severity heuristic
+│   ├── TFLiteEngine.kt       loads 3 cascade models, runs inference, severity heuristic
 │   ├── ImagePreprocessor.kt  EXIF rotation, 224×224 resize, float32 normalization
-│   └── TomatoClasses.kt      CLASS_NAMES list + MODEL_ASSET constant
+│   └── TomatoClasses.kt      STAGE1/2/3 asset constants + 11-class CLASS_NAMES
 │
 ├── data/
 │   ├── model/
-│   │   ├── ScanRecord.kt
+│   │   ├── ScanRecord.kt          ScanRecord + ScanFeedback + ScanHistory
 │   │   ├── DiagnosisResult.kt
+│   │   ├── ConditionInfo.kt       ConditionInfo + TreatmentsCatalog (treatments.json shape)
 │   │   ├── Treatment.kt
-│   │   ├── UserSettings.kt
-│   │   └── Enums.kt          StressType, SeverityLevel, GrowingMethod, Language, …
+│   │   ├── UserSettings.kt        language, growingMethod, threshold, onboarding, themeMode
+│   │   ├── ThemeMode.kt           LIGHT | DARK | SYSTEM
+│   │   └── Enums.kt               StressType, SeverityLevel, GrowingMethod, Language, …
 │   ├── storage/
 │   │   ├── ScanStorageManager.kt   read/write/delete scan_history.json
-│   │   ├── ScanExporter.kt         SAF write
-│   │   └── ScanImporter.kt         SAF read + merge
+│   │   ├── SettingsStore.kt        flat settings.json + reactive StateFlow<UserSettings>
+│   │   ├── ScanExporter.kt         SAF write (history JSON)
+│   │   ├── ScanImporter.kt         SAF read + merge
+│   │   └── TrainingDataExporter.kt SAF write — feedback-flywheel training ZIP
 │   └── repository/
-│       ├── TreatmentRepository.kt  loads treatments.json asset once → immutable map
-│       └── SettingsStore.kt        DataStore<Preferences> wrapper
+│       ├── TreatmentRepository.kt  treatments.json → immutable map (lookup by id)
+│       └── ConditionRepository.kt  treatments.json → full catalog (Encyclopedia/feedback)
 │
 └── ui/
     ├── navigation/
-    │   └── TomatoCareNavHost.kt    NavGraph with five destinations
-    ├── home/
-    │   ├── HomeScreen.kt
-    │   └── HomeViewModel.kt
-    ├── scan/
-    │   ├── ScanScreen.kt
-    │   ├── ScanViewModel.kt
-    │   └── CameraController.kt     CameraX setup
-    ├── result/
-    │   ├── ResultScreen.kt
-    │   └── ResultViewModel.kt
-    ├── history/
-    │   ├── HistoryScreen.kt
-    │   └── HistoryViewModel.kt
-    ├── settings/
-    │   ├── SettingsScreen.kt
-    │   └── SettingsViewModel.kt
+    │   ├── TomatoCareNavHost.kt    NavGraph + bottom nav bar
+    │   └── Routes.kt               route constants + BottomNavItem
+    ├── theme/
+    │   ├── Theme.kt                TomatoCareTheme (light/dark schemes, ThemeMode)
+    │   ├── Color.kt                palette
+    │   └── Type.kt                 typography scale
+    ├── home/                       HomeScreen + HomeViewModel (stats dashboard)
+    ├── scan/                       ScanScreen + ScanViewModel + CameraScreen (CameraX)
+    ├── result/                     ResultScreen + ResultViewModel (+ feedback)
+    ├── encyclopedia/               EncyclopediaScreen + EncyclopediaViewModel
+    ├── history/                    HistoryScreen + HistoryViewModel
+    ├── settings/                   SettingsScreen + SettingsViewModel
     └── components/
         ├── TreatmentCard.kt        expandable treatment row
-        ├── StressBadge.kt          severity / condition type indicator
+        ├── StressBadge.kt          condition-type indicator (static metadata)
         ├── LowConfidenceWarning.kt orange warning with Retake / Show Anyway
-        └── SeverityChip.kt         LOW / MEDIUM / HIGH / CRITICAL chip
+        ├── GateRejectWarning.kt    cascade-gate rejection (not a leaf / not tomato)
+        ├── SeverityChip.kt         LOW / MEDIUM / HIGH / CRITICAL chip
+        ├── ConfidenceBar.kt        thin confidence bar
+        ├── ConfidenceGauge.kt      circular confidence gauge
+        ├── StatCard.kt             Home stat tile
+        ├── SimpleBarChart.kt       Home disease-distribution chart
+        ├── ScanAnimationOverlay.kt "analysing" overlay
+        ├── OnboardingDialog.kt     one-time how-to-use dialog
+        ├── GrowingMethodSelector.kt shared method chip selector
+        └── FeedbackCard.kt         flywheel "was this correct?" prompt
 ```

@@ -208,8 +208,16 @@ ls android/app/src/main/assets/stage1_leaf_float16.tflite \
    android/app/src/main/assets/stage3_disease_float16.tflite
 ```
 
-If any are missing, copy them from `ml/models/tflite/` (after running the ML
-pipeline) or ask a team member who has the trained models.
+If any are missing, get them one of three ways:
+- **Download** them from the repository's
+  [Releases](https://github.com/AlBaraa63/TomatoCare/releases) page (fastest for
+  contributors who only work on the app),
+- **copy** them from `ml/models/tflite/` after running the ML pipeline, or
+- ask a team member who has the trained models.
+
+The app builds and installs without the models, but every scan fails until they
+are present — they are loaded by name at runtime, so the build itself does not
+detect their absence.
 
 ### 3. Build from command line
 

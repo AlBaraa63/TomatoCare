@@ -15,23 +15,28 @@ bilingual mechanism.
    - [HomeScreen](#homescreen)
    - [ScanScreen](#scanscreen)
    - [ResultScreen](#resultscreen)
+   - [EncyclopediaScreen](#encyclopediascreen)
    - [HistoryScreen](#historyscreen)
    - [SettingsScreen](#settingsscreen)
-5. [Navigation](#navigation)
-6. [Inference pipeline](#inference-pipeline)
+5. [The feedback flywheel](#the-feedback-flywheel)
+6. [Navigation](#navigation)
+7. [Inference pipeline](#inference-pipeline)
    - [TFLiteEngine](#tfliteengine)
    - [ImagePreprocessor](#imagepreprocessor)
    - [TomatoClasses](#tomatoclasses)
-7. [Data layer](#data-layer)
+8. [Data layer](#data-layer)
    - [Data models](#data-models)
    - [ScanStorageManager](#scanstoragemanager)
    - [TreatmentRepository](#treatmentrepository)
+   - [ConditionRepository](#conditionrepository)
    - [SettingsStore](#settingsstore)
    - [ScanExporter and ScanImporter](#scanexporter-and-scanimporter)
-8. [UI components](#ui-components)
-9. [Bilingual system](#bilingual-system)
-10. [Unit tests](#unit-tests)
-11. [Build commands](#build-commands)
+   - [TrainingDataExporter](#trainingdataexporter)
+9. [Theming and dark mode](#theming-and-dark-mode)
+10. [UI components](#ui-components)
+11. [Bilingual system](#bilingual-system)
+12. [Unit tests](#unit-tests)
+13. [Build commands](#build-commands)
 
 ---
 
@@ -95,24 +100,29 @@ ViewModels through the `Application` reference.
 
 ```kotlin
 class AppContainer(context: Context) {
-    val settingsStore       = SettingsStore(context)
-    val scanStorageManager  = ScanStorageManager(context)
-    val scanExporter        = ScanExporter(context, scanStorageManager)
-    val scanImporter        = ScanImporter(context, scanStorageManager)
-    val treatmentRepository = TreatmentRepository(context)
-    val imagePreprocessor   = ImagePreprocessor()
-    val tfliteEngine        = TFLiteEngine(context, imagePreprocessor)
+    val settingsStore        = SettingsStore(context)
+    val scanStorageManager   = ScanStorageManager(context)
+    val scanExporter         = ScanExporter(context, scanStorageManager)
+    val scanImporter         = ScanImporter(context, scanStorageManager)
+    val trainingDataExporter = TrainingDataExporter(context, scanStorageManager)
+    val treatmentRepository  = TreatmentRepository(context)
+    val conditionRepository  = ConditionRepository(context)   // Encyclopedia + feedback
+    val imagePreprocessor    = ImagePreprocessor()
+    val tfliteEngine         = TFLiteEngine(context, imagePreprocessor, treatmentRepository)
 
     init {
         // Warm-up: fire one inference on a blank bitmap so the first real scan
         // doesn't pay the JIT + native library loading cost.
         scope.launch(SupervisorJob()) {
             tfliteEngine.classify(Bitmap.createBitmap(224, 224, Bitmap.Config.ARGB_8888),
-                                  GrowingMethod.OPEN_FIELD)
+                                  GrowingMethod.GREENHOUSE)
         }
     }
 }
 ```
+
+`conditionRepository` and `trainingDataExporter` were added alongside the
+Encyclopedia screen and the [feedback flywheel](#the-feedback-flywheel).
 
 The warm-up uses `SupervisorJob` so a warm-up failure (extremely unlikely)
 does not crash the app.
@@ -125,23 +135,43 @@ does not crash the app.
 
 **File:** `ui/home/HomeScreen.kt`, `ui/home/HomeViewModel.kt`
 
-The landing screen. Shown immediately after launch.
+The landing screen — a **dashboard** that summarises the user's scan history at
+a glance. Shown immediately after launch (and is the bottom-nav start
+destination).
 
 **What it displays:**
-- App logo and tagline ("Identify tomato leaf diseases — fully offline.")
-- Three navigation buttons: Scan a leaf, View history, Settings
-- **Last scan card** (if any scan exists): shows the primary condition name,
-  stress badge, and timestamp. Tapping it navigates to that scan's result.
+- **Hero card** — a gradient banner with the app title, tagline, and a "Scan a
+  leaf" call-to-action. Tapping anywhere on it opens the camera.
+- **Stats row** — three `StatCard`s: total scans, **health rate** (% of scans
+  whose primary diagnosis is `healthy`), and number of distinct conditions seen.
+- **Last scan card** (if any scan exists): thumbnail, primary condition name
+  (in the active language), a `ConfidenceBar`, severity chip, and timestamp.
+  Tapping it opens that scan's result.
+- **Disease distribution** — a `SimpleBarChart` of the user's three most
+  frequent conditions (labels localised to the active language).
+- **Onboarding dialog** — a one-time how-to-use dialog shown on first launch
+  (gated by `UserSettings.hasSeenOnboarding`).
 
 **ViewModel state:**
 ```kotlin
 data class HomeUiState(
+    val isLoading: Boolean = true,
     val lastScan: ScanRecord? = null,
+    val totalScans: Int = 0,
+    val showOnboarding: Boolean = false,
+    val distinctConditions: Int = 0,
+    val healthRate: Int = 0,                       // % primary == "healthy"
+    val topConditions: List<Pair<String, Int>> = emptyList(),
+    val language: Language = Language.ENGLISH,
 )
 ```
 
-`HomeViewModel.refresh()` is called every time the screen is (re)composed —
-this ensures the last scan card updates after a new scan or deletion.
+`HomeViewModel.refresh()` is called every time the screen is entered
+(`LaunchedEffect`), so the dashboard updates after a new scan or deletion.
+
+> The health-rate metric keys on the canonical `conditionId` `"healthy"` (the
+> Stage-3 class key), not a display name — the value must match
+> `assets/treatments.json`.
 
 ---
 
@@ -208,17 +238,46 @@ data class ResultUiState(
 ```
 
 **What it displays:**
-- Primary condition: English name + Arabic name (bilingual)
-- Severity chip (LOW / MEDIUM / HIGH / CRITICAL)
-- Confidence percentage (e.g. "87.3%")
-- **Growing method selector:** radio buttons (Greenhouse / Open Field /
-  Hydroponic / Saline Soil). Changing the method re-filters treatments
-  via `ResultViewModel.onMethodSelected(method)`.
+- Header card: thumbnail, primary condition name in the active language,
+  timestamp, the on-device inference time ("Diagnosed on-device in *N* ms" —
+  NFR-02 evidence), stress badge, severity chip, and a circular
+  **`ConfidenceGauge`** showing the top confidence.
+- **Growing method selector:** chips (Greenhouse / Open Field / Hydroponic /
+  Saline Soil). Changing the method re-filters treatments via
+  `ResultViewModel.onMethodSelected(method)`.
 - **Treatment cards:** one per treatment for the selected method. Each card
   shows treatment type (Chemical/Cultural/Biological), urgency level, and
   expandable full recommendation text in the active language.
-- **Other possibilities:** collapsible section showing the 2nd and 3rd
-  ranked diagnoses with their confidence percentages.
+- **Feedback card:** the [feedback flywheel](#the-feedback-flywheel) prompt —
+  "Was this correct?". Captured once per scan, then becomes a thank-you summary.
+- **Other possibilities:** the 2nd and 3rd ranked diagnoses with `ConfidenceBar`
+  and percentage, names localised to the active language.
+
+---
+
+### EncyclopediaScreen
+
+**File:** `ui/encyclopedia/EncyclopediaScreen.kt`, `ui/encyclopedia/EncyclopediaViewModel.kt`
+
+A browsable, **searchable reference** of all conditions the app knows about —
+independent of whether the user has scanned them. Backed by
+[`ConditionRepository`](#conditionrepository) (which reads `treatments.json`).
+
+**What it displays:**
+- A search field that filters conditions by English **or** Arabic name.
+- A `LazyColumn` of expandable cards. Collapsed: condition name + the other
+  language as a subtitle. Expanded: stress badge, default severity chip, and
+  the full set of `TreatmentCard`s for that condition.
+
+**ViewModel state:**
+```kotlin
+data class EncyclopediaUiState(
+    val allConditions: List<ConditionInfo> = emptyList(),
+    val filteredConditions: List<ConditionInfo> = emptyList(),
+    val searchQuery: String = "",
+    val language: Language = Language.ENGLISH,
+)
+```
 
 ---
 
@@ -250,15 +309,20 @@ shows a Snackbar with "Undo". If the user taps Undo within 5 seconds,
 
 **Sections:**
 
-**Language:**
-Radio buttons for English / Arabic. Changing language calls
-`LocaleHelper.setLocale(context, language)` and then recreates the Activity
-so the entire UI re-renders in the new language and layout direction.
+**Appearance — language:**
+Chips for English / العربية. Changing language writes `UserSettings.language`,
+which `MainActivity` observes via the reactive `SettingsStore.settings` flow and
+applies by recreating the Activity (so resources reload in the new locale and
+layout direction). See [Bilingual system](#bilingual-system).
+
+**Appearance — theme mode:**
+Chips for Light / Dark / System. Writes `UserSettings.themeMode`; the theme
+switches **live** (no restart) because `MainActivity` drives `TomatoCareTheme`
+from the same reactive flow. See [Theming and dark mode](#theming-and-dark-mode).
 
 **Default growing method:**
-Radio buttons for Greenhouse / Open Field / Hydroponic / Saline Soil.
-Saved to `SettingsStore` (DataStore). Used as the default in `ScanViewModel`
-when processing a new scan.
+A `GrowingMethodSelector` (Greenhouse / Open Field / Hydroponic / Saline Soil).
+Saved to `SettingsStore`. Used as the default in `ScanViewModel` for new scans.
 
 **Data management:**
 
@@ -266,34 +330,79 @@ when processing a new scan.
 |---|---|
 | Export history | `ActivityResultContracts.CreateDocument("application/json")` → `ScanExporter.export(uri)` |
 | Import history | `ActivityResultContracts.OpenDocument(["application/json"])` → `ScanImporter.import(uri)` with confirmation dialog |
+| **Export training data** | `CreateDocument("application/zip")` → [`TrainingDataExporter.export(uri)`](#trainingdataexporter) — the feedback-flywheel ZIP |
 | Delete all history | Confirmation dialog → `ScanStorageManager.deleteAll()` |
 
-Events emitted to show Snackbar feedback: `ExportFinished(count)`,
-`ImportFinished(count)`, `HistoryDeleted`, `LanguageChanged`.
+Events emitted to show Snackbar feedback: `ExportFinished`, `ImportFinished`,
+`HistoryDeleted`, `LanguageChanged`.
+
+---
+
+## The feedback flywheel
+
+> **This is the app's strategic feature.** The ML evaluation measures a lab→field
+> accuracy gap (97.19% lab end-to-end vs 77.2% field on PlantDoc, per
+> `reports/eval_deployed.json`). The report's plan to close that gap is a
+> **real-world data flywheel**: collect genuine field images with verified
+> labels, then retrain. That flywheel is **implemented in the app**, fully
+> offline — nothing is uploaded; the user owns and exports the data.
+
+**The loop:**
+
+1. **Capture** — every scan is saved as a `ScanRecord` (image + prediction).
+2. **Confirm** — on the result screen, the `FeedbackCard` asks *"Was this
+   correct?"*. The user taps **Yes** (the prediction becomes the verified label)
+   or **No** and picks the true condition from a dropdown of all 11 classes.
+   The answer is stored as `ScanRecord.feedback: ScanFeedback?` and is captured
+   **once per scan** (the card then shows a read-only thank-you).
+3. **Export** — Settings → *Export training data* runs
+   [`TrainingDataExporter`](#trainingdataexporter), which bundles every
+   feedback-labelled scan into a ZIP, **grouped by true label**, with a
+   `manifest.json`. The folder layout is the exact shape the ML training farm
+   ingests (`integrate_plantdoc.py`).
+4. **Retrain** — the exported ZIP drops into the ML pipeline as new field data.
+
+```kotlin
+@Serializable
+data class ScanFeedback(
+    val wasCorrect: Boolean,
+    val correctedConditionId: String? = null,  // true class when wasCorrect == false
+    val timestamp: String,                      // ISO-8601 UTC
+)
+```
+
+The true label written to the export is the user's correction when they marked
+the diagnosis wrong, otherwise the model's own primary prediction (a confirmed
+label). Feedback is submitted via `ResultViewModel.submitFeedback(wasCorrect, conditionId?)`.
 
 ---
 
 ## Navigation
 
-**File:** `ui/navigation/TomatoCareNavHost.kt`
+**File:** `ui/navigation/TomatoCareNavHost.kt`, `ui/navigation/Routes.kt`
 
-Single `NavController` with five destinations:
+A single `NavController` with six destinations, five of which are reachable from
+a **bottom navigation bar** (`BottomNavItem`):
 
 ```
-Routes.HOME         → HomeScreen
-Routes.SCAN         → ScanScreen
-Routes.RESULT       → ResultScreen  (requires Int arg: scanId)
-Routes.HISTORY      → HistoryScreen
-Routes.SETTINGS     → SettingsScreen
+Routes.HOME          → HomeScreen        ┐
+Routes.SCAN          → ScanScreen        │
+Routes.ENCYCLOPEDIA  → EncyclopediaScreen ├─ bottom-nav tabs
+Routes.HISTORY       → HistoryScreen     │
+Routes.SETTINGS      → SettingsScreen    ┘
+Routes.RESULT        → ResultScreen  (detail; requires Int arg: scanId)
 ```
 
-After a successful scan, the back-stack is cleared up to (and including)
-`HomeScreen` before pushing `ResultScreen`. This means pressing Back from
-the result goes home — not back to the camera, which would be disorienting.
+The bottom bar is **hidden on `ResultScreen`** (a detail screen pushed on top,
+with its own back arrow). Tab switching uses `saveState`/`restoreState` +
+`launchSingleTop` so each tab keeps its scroll position.
+
+After a successful scan, the back-stack pops up to `HomeScreen` before pushing
+`ResultScreen`, so Back from the result goes home — not back to the camera.
 
 ```kotlin
 navController.navigate(Routes.result(scanId)) {
-    popUpTo(Routes.HOME) { inclusive = false }
+    popUpTo(Routes.HOME)
 }
 ```
 
@@ -410,11 +519,23 @@ data class ScanRecord(
     val growingMethod: GrowingMethod,
     val modelVersion: String,     // "2.0.0"
     val results: List<DiagnosisResult>,
+    val feedback: ScanFeedback? = null,   // flywheel; null until the user answers
+    val inferenceTimeMs: Long? = null,    // total cascade time; NFR-02 evidence, shown on Result
 ) {
     val primary: DiagnosisResult?
         get() = results.firstOrNull { it.isPrimary } ?: results.firstOrNull()
 }
+
+@Serializable
+data class ScanFeedback(             // see "The feedback flywheel"
+    val wasCorrect: Boolean,
+    val correctedConditionId: String? = null,
+    val timestamp: String,
+)
 ```
+
+The `feedback` field defaults to `null`, so adding it did not break existing
+on-disk history (the JSON config uses `ignoreUnknownKeys` + `encodeDefaults`).
 
 **`DiagnosisResult`** — one ranked result within a scan:
 ```kotlin
@@ -451,9 +572,27 @@ StressType:    BIOTIC | ABIOTIC  (static metadata — NOT a learned prediction)
 SeverityLevel: LOW | MEDIUM | HIGH | CRITICAL
 GrowingMethod: GREENHOUSE | OPEN_FIELD | HYDROPONIC | SALINE_SOIL
 Language:      ENGLISH | ARABIC
+ThemeMode:     LIGHT | DARK | SYSTEM
 TreatmentType: CHEMICAL | CULTURAL | BIOLOGICAL
 UrgencyLevel:  LOW | MEDIUM | HIGH | CRITICAL
 ```
+
+**`UserSettings`** — persisted app preferences (see [SettingsStore](#settingsstore)):
+```kotlin
+@Serializable
+data class UserSettings(
+    val language: Language = Language.ENGLISH,
+    val defaultGrowingMethod: GrowingMethod = GrowingMethod.OPEN_FIELD,
+    val confidenceThreshold: Float = 0.60f,
+    val hasSeenOnboarding: Boolean = false,   // gates the one-time Home dialog
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+)
+```
+
+**`ConditionInfo` / `TreatmentsCatalog`** — the parsed shape of
+`assets/treatments.json` (used by [TreatmentRepository](#treatmentrepository)
+and [ConditionRepository](#conditionrepository)): a `conditionId`, `classLabel`,
+bilingual names, `stressType`, `severityDefault`, and a `treatments` list.
 
 ### ScanStorageManager
 
@@ -493,20 +632,41 @@ fun getTreatments(conditionId: String, method: GrowingMethod): List<Treatment>
 The `treatments.json` file is a 32 KB JSON array of treatment objects. It is
 the source of all treatment recommendations and is bundled inside the APK.
 
-### SettingsStore
+### ConditionRepository
 
-**File:** `data/repository/SettingsStore.kt`
+**File:** `data/repository/ConditionRepository.kt`
 
-A DataStore-backed preferences wrapper.
+Loads `assets/treatments.json` once and exposes its conditions for the
+[Encyclopedia](#encyclopediascreen) and the [feedback](#the-feedback-flywheel)
+dropdown. Distinct from `TreatmentRepository` (which is lookup-by-id for
+inference); this one serves whole-catalog browsing.
 
 ```kotlin
-val growingMethod: Flow<GrowingMethod>    // default: OPEN_FIELD
-val language: Flow<Language>              // default: ENGLISH
-val confidenceThreshold: Flow<Float>      // default: 0.60
-
-suspend fun setGrowingMethod(method: GrowingMethod)
-suspend fun setLanguage(language: Language)
+fun getAllConditions(): List<ConditionInfo>          // sorted by English name
+fun getCondition(conditionId: String): ConditionInfo?
 ```
+
+### SettingsStore
+
+**File:** `data/storage/SettingsStore.kt`
+
+A flat-JSON store (`filesDir/settings.json`), **not** DataStore — the codebase
+standardises on kotlinx.serialization and settings is a single object with no
+migrations. It uses the same atomic temp-file-then-rename write discipline as
+`ScanStorageManager`.
+
+```kotlin
+val settings: StateFlow<UserSettings>     // reactive — seeded by read(), updated by write()
+
+suspend fun read(): UserSettings          // loads from disk, seeds the flow
+suspend fun write(settings: UserSettings) // atomic write, updates the flow
+```
+
+> **Why the `StateFlow` matters.** `MainActivity` collects `settings` to drive
+> the theme and locale. Without a reactive stream, the in-app theme/language
+> toggle would only take effect after an app restart (this was a real bug —
+> the store originally exposed only a one-shot `read()`). Theme now switches
+> live; a language change triggers `Activity.recreate()` to reload resources.
 
 ### ScanExporter and ScanImporter
 
@@ -530,6 +690,58 @@ suspend fun import(sourceUri: Uri): ImportResult
 // records (deduplication by scanId).
 // Returns ImportResult.Success(importedCount) or ImportResult.Failure(message).
 ```
+
+### TrainingDataExporter
+
+**File:** `data/storage/TrainingDataExporter.kt`
+
+The export half of the [feedback flywheel](#the-feedback-flywheel). Bundles
+every scan that carries `feedback` into a single ZIP at a SAF-chosen URI:
+
+```
+<true_label>/scan_<id>.jpg     ← images grouped by their verified label
+manifest.json                  ← per-image record (label, predicted, confidence, …)
+```
+
+```kotlin
+suspend fun export(targetUri: Uri): TrainingExportResult
+//   Success(imageCount, labelCount) | Empty (no feedback yet) | Failure(message)
+```
+
+The true label is the user's correction when they marked the diagnosis wrong,
+otherwise the model's confirmed prediction. Labels are canonical `conditionId`
+keys, so the folder layout drops straight into the ML training farm (the same
+shape `integrate_plantdoc.py` expects). Fully offline — writes only to the
+user-selected document.
+
+---
+
+## Theming and dark mode
+
+**Files:** `ui/theme/Theme.kt`, `ui/theme/Color.kt`, `ui/theme/Type.kt`
+
+`TomatoCareTheme` is a Material 3 theme with explicit light and dark color
+schemes (a clinical-blue / healthy-green palette), shared shapes, and a custom
+typography scale. It takes a `ThemeMode`:
+
+```kotlin
+@Composable
+fun TomatoCareTheme(themeMode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () -> Unit) {
+    val darkTheme = when (themeMode) {
+        ThemeMode.LIGHT  -> false
+        ThemeMode.DARK   -> true
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
+    val colorScheme = if (darkTheme) DarkColors else LightColors
+    MaterialTheme(colorScheme, TomatoCareTypography, TomatoCareShapes, content)
+}
+```
+
+`MainActivity` reads `themeMode` from the reactive
+[`SettingsStore.settings`](#settingsstore) flow, so changing it in Settings
+recomposes the theme **live** — no restart. Screens use
+`MaterialTheme.colorScheme.*` tokens (never hard-coded colors, apart from the
+hero gradient), so both schemes render correctly.
 
 ---
 
@@ -581,6 +793,20 @@ Color-coded chip for the four severity levels:
 - `HIGH` → orange
 - `CRITICAL` → red
 
+### Other components
+
+| Component | File | Role |
+|---|---|---|
+| `ConfidenceBar` | `ConfidenceBar.kt` | Thin horizontal confidence bar (Home last-scan, Result secondary list) |
+| `ConfidenceGauge` | `ConfidenceGauge.kt` | Circular gauge for the primary confidence on Result |
+| `StatCard` | `StatCard.kt` | Icon + value + label tile in the Home stats row |
+| `SimpleBarChart` | `SimpleBarChart.kt` | Disease-distribution bar chart on Home (`BarChartItem` data) |
+| `ScanAnimationOverlay` | `ScanAnimationOverlay.kt` | Animated "analysing" overlay during inference |
+| `GateRejectWarning` | `GateRejectWarning.kt` | Shown when a cascade gate rejects the image (not a leaf / not a tomato) with a Retake action |
+| `OnboardingDialog` | `OnboardingDialog.kt` | One-time how-to-use dialog on first launch |
+| `GrowingMethodSelector` | `GrowingMethodSelector.kt` | Shared chip selector for the four growing methods (Result + Settings) |
+| `FeedbackCard` | `FeedbackCard.kt` | The [flywheel](#the-feedback-flywheel) "Was this correct?" prompt |
+
 ---
 
 ## Bilingual system
@@ -597,11 +823,13 @@ Compose accesses them via `stringResource(R.string.key)`.
 
 ### Locale switching
 
-`LocaleHelper.setLocale(context, Language.ARABIC)` updates the app's
-configuration to use the `ar` locale and triggers an Activity restart. After
-restart, all `stringResource()` calls return Arabic strings, and the layout
-system automatically mirrors RTL (right-to-left) for all standard Compose
-layouts.
+Changing the language in Settings writes `UserSettings.language` to
+`SettingsStore`. `MainActivity` collects the reactive `settings` flow; when the
+language differs from the one the current Activity context was built with, it
+calls `recreate()`. On recreation, `attachBaseContext` applies the new locale
+via `LocaleHelper.applyLocale(base, language)` before the first frame, so all
+`stringResource()` calls return the right language and Compose mirrors RTL for
+Arabic automatically — with no visible English flash.
 
 ### Bilingual data
 
@@ -620,18 +848,24 @@ display.
 
 ## Unit tests
 
-**File:** `android/app/src/test/kotlin/com/tomatocare/ClassNamesTest.kt`
+42 JVM unit tests (no device needed) live in
+`android/app/src/test/kotlin/com/tomatocare/`. They run on every push/PR via
+[GitHub Actions CI](../.github/workflows/android-ci.yml).
 
-```kotlin
-@Test fun classNamesAreAlphabeticallySorted()
-@Test fun classNameCountMatchesConfig()
-@Test fun classNamesMatchTrainingConfig()
-```
+| Test file | What it guards |
+|---|---|
+| `ClassNamesTest` | `TomatoClasses.CLASS_NAMES` stays alphabetical and matches `training_config.yaml` — a mismatch would silently mislabel every output tensor index |
+| `ScanHistorySerializationTest` | Scan-history JSON round-trips; unknown keys ignored |
+| `ScanRecordTest` | `ScanRecord.primary` selection logic |
+| `FormatTest` | Timestamp formatting |
+| `FeedbackSerializationTest` | `ScanFeedback` round-trips **and legacy records without the field still decode** (flywheel backward-compat) |
+| `HomeStatsTest` | Dashboard stats incl. the health-rate metric (regression test for the `"healthy"` conditionId fix) |
+| `SeverityHeuristicTest` | Confidence → severity boundary mapping |
+| `TrainingLabelTest` | Flywheel export label resolution (prediction vs correction vs fallback) |
 
-These tests verify that `TomatoClasses.CLASS_NAMES` stays in alphabetical
-order and contains exactly the classes defined in `training_config.yaml`. A
-mismatch would cause silent misclassification (wrong label for every output
-tensor index) — this is caught at build time, not at runtime.
+The pure logic these test (`HomeStats`, `SeverityHeuristic`,
+`TrainingDataExporter.resolveLabel`) was deliberately extracted from
+Android-coupled classes so it is unit-testable without Robolectric or a device.
 
 Run:
 ```bash
