@@ -29,6 +29,7 @@
     <string name="action_settings">Settings</string>
     <string name="action_back">Back</string>
     <string name="action_capture">Capture</string>
+    <string name="action_open_gallery">Open gallery</string>
     <string name="action_pick_from_gallery">Pick from gallery</string>
     <string name="action_grant_permission">Grant camera permission</string>
     <string name="action_retake">Retake</string>
@@ -80,6 +81,9 @@
     <string name="result_treatments_title">Recommended treatments</string>
     <string name="result_no_treatments_for_method">No advice yet for this growing method. Try another option above.</string>
     <string name="result_other_possibilities">Other possibilities</string>
+    <string name="result_not_found">This scan could not be found.</string>
+    <string name="result_no_diagnosis">No diagnosis is available for this scan.</string>
+    <string name="result_inference_time">Diagnosed on-device in %1$d ms</string>
 
     <!-- Low confidence -->
     <string name="low_confidence_title">Low confidence</string>

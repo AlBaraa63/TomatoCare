@@ -32,6 +32,7 @@
     <string name="action_view_history">عرض السجل</string>
     <string name="action_settings">الإعدادات</string>
     <string name="action_back">رجوع</string>
+    <string name="action_open_gallery">فتح المعرض</string>
     <string name="action_capture">التقاط</string>
     <string name="action_pick_from_gallery">اختيار من المعرض</string>
     <string name="action_grant_permission">منح إذن الكاميرا</string>
@@ -79,6 +80,9 @@
     <string name="result_treatments_title">العلاجات الموصى بها</string>
     <string name="result_no_treatments_for_method">لا توجد توصيات بعد لهذه الطريقة. جرّب خيارًا آخر من الأعلى.</string>
     <string name="result_other_possibilities">احتمالات أخرى</string>
+    <string name="result_not_found">تعذّر العثور على هذا الفحص.</string>
+    <string name="result_no_diagnosis">لا يتوفّر تشخيص لهذا الفحص.</string>
+    <string name="result_inference_time">تم التشخيص على الجهاز في %1$d مللي ثانية</string>
 
     <string name="low_confidence_title">ثقة منخفضة</string>
     <string name="low_confidence_body">النموذج غير متأكد من هذه الصورة. للحصول على أفضل النتائج، اجعل ورقة واحدة تملأ الإطار في إضاءة واضحة.</string>

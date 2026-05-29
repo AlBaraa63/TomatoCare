@@ -26,13 +26,20 @@ fun ScanScreen(
     val state by viewModel.uiState.collectAsState()
 
     LaunchedEffect(state) {
-        if (state is ScanUiState.Success) {
-            onResultReady((state as ScanUiState.Success).savedScanId)
-        } else if (state is ScanUiState.LowConfidence) {
-            onResultReady((state as ScanUiState.LowConfidence).savedScanId)
+        when (val s = state) {
+            is ScanUiState.Success -> onResultReady(s.savedScanId)
+            is ScanUiState.LowConfidence -> onResultReady(s.savedScanId)
+            is ScanUiState.Error -> {
+                // Decode or inference failed — tell the user and return to camera
+                // instead of leaving a silent blank screen (or crashing).
+                android.widget.Toast.makeText(
+                    context, s.message, android.widget.Toast.LENGTH_LONG).show()
+                viewModel.reset()
+            }
+            else -> Unit
         }
     }
-    
+
     val isProcessing = state is ScanUiState.Processing
     val rejectReason = (state as? ScanUiState.Rejected)?.reason
 
@@ -40,9 +47,13 @@ fun ScanScreen(
         modifier = Modifier.fillMaxSize(),
     ) {
         CameraScreen(
-            onCapture = { uri -> viewModel.onImageCaptured(android.graphics.BitmapFactory.decodeFile(uri.path)) },
+            onCapture = { uri -> viewModel.onImageCaptured(uri) },
             onBack = onBack,
             showOverlay = !isProcessing && rejectReason == null,
+            onShowSnackbar = { msg ->
+                android.widget.Toast.makeText(
+                    context, msg, android.widget.Toast.LENGTH_SHORT).show()
+            },
         )
 
         if (isProcessing) {

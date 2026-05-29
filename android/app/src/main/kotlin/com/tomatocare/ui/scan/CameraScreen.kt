@@ -178,10 +178,10 @@ fun CameraScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = androidx.compose.ui.graphics.Color.White)
+                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.action_back), tint = androidx.compose.ui.graphics.Color.White)
             }
             IconButton(onClick = { galleryLauncher.launch("image/*") }) {
-                Icon(Icons.Default.PhotoLibrary, contentDescription = "Gallery", tint = androidx.compose.ui.graphics.Color.White)
+                Icon(Icons.Default.PhotoLibrary, contentDescription = stringResource(R.string.action_open_gallery), tint = androidx.compose.ui.graphics.Color.White)
             }
         }
 

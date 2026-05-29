@@ -32,34 +32,17 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             val all = container.scanStorageManager.loadAll()
             val settings = container.settingsStore.read()
-            
-            val validScans = all.mapNotNull { it.primary }
-            val distinct = validScans.map { it.conditionId }.distinct().count()
-            // conditionId for the healthy class is "healthy" (see assets/treatments.json),
-            // not "tomato_healthy" — the old value left Health Rate stuck at 0%.
-            val healthyCount = validScans.count { it.conditionId == "healthy" }
-            val healthRate = if (validScans.isNotEmpty()) {
-                (healthyCount * 100f / validScans.size).toInt()
-            } else 0
 
-            val isArabic = settings.language == Language.ARABIC
-            val conditionCounts = validScans.groupingBy {
-                if (isArabic) it.conditionNameAr else it.conditionNameEn
-            }.eachCount()
-            
-            val topConditions = conditionCounts.entries
-                .sortedByDescending { it.value }
-                .take(3)
-                .map { it.key to it.value }
+            val stats = HomeStats.compute(all, settings.language == Language.ARABIC)
 
             _uiState.value = HomeUiState(
                 isLoading = false,
                 lastScan = all.firstOrNull(),
-                totalScans = all.size,
+                totalScans = stats.totalScans,
                 showOnboarding = !settings.hasSeenOnboarding,
-                distinctConditions = distinct,
-                healthRate = healthRate,
-                topConditions = topConditions,
+                distinctConditions = stats.distinctConditions,
+                healthRate = stats.healthRate,
+                topConditions = stats.topConditions,
                 language = settings.language,
             )
         }

@@ -2,6 +2,10 @@ package com.tomatocare.ui.scan
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -14,10 +18,12 @@ import com.tomatocare.data.model.InferenceOutput
 import com.tomatocare.data.model.RejectReason
 import com.tomatocare.data.model.ScanRecord
 import com.tomatocare.di.AppContainer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
@@ -45,10 +51,22 @@ class ScanViewModel(
     private val _uiState = MutableStateFlow<ScanUiState>(ScanUiState.Idle)
     val uiState: StateFlow<ScanUiState> = _uiState.asStateFlow()
 
-    fun onImageCaptured(bitmap: Bitmap) {
+    fun onImageCaptured(uri: Uri) {
         viewModelScope.launch {
             _uiState.value = ScanUiState.Processing
             try {
+                // Decode here (not in the Composable) so both camera (file://)
+                // and gallery (content://) URIs work. decodeFile(uri.path) only
+                // handled file:// and returned null for gallery picks → crash.
+                val bitmap = decodeBitmap(uri)
+                if (bitmap == null) {
+                    _uiState.value = ScanUiState.Error(
+                        getApplication<Application>().getString(
+                            R.string.error_image_decode_failed)
+                    )
+                    return@launch
+                }
+
                 val settings = container.settingsStore.read()
                 val method = settings.defaultGrowingMethod
                 val threshold = settings.confidenceThreshold
@@ -72,7 +90,8 @@ class ScanViewModel(
                     bitmap,
                 )
 
-                val record = buildRecord(output.results, savedPath, method)
+                val record = buildRecord(output.results, savedPath, method,
+                                         output.inferenceTimeMs)
                 container.scanStorageManager.saveRecord(record)
                 val savedId = container.scanStorageManager.loadAll()
                     .firstOrNull()?.scanId ?: 0
@@ -95,10 +114,34 @@ class ScanViewModel(
 
     fun reset() { _uiState.value = ScanUiState.Idle }
 
+    /**
+     * Decode a bitmap from any URI (camera file:// or gallery content://) on
+     * the IO dispatcher. Returns null on any failure instead of throwing.
+     * On API 28+ ImageDecoder applies EXIF orientation automatically; the
+     * SOFTWARE allocator is required because TFLite preprocessing reads pixels
+     * (a hardware bitmap would fail getPixels).
+     */
+    private suspend fun decodeBitmap(uri: Uri): Bitmap? = withContext(Dispatchers.IO) {
+        val resolver = getApplication<Application>().contentResolver
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val source = ImageDecoder.createSource(resolver, uri)
+                ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                }
+            } else {
+                resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+            }
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
     private fun buildRecord(
         results: List<DiagnosisResult>,
         imagePath: String,
         method: GrowingMethod,
+        inferenceTimeMs: Long,
     ): ScanRecord = ScanRecord(
         scanId = 0,                       // assigned by ScanStorageManager
         imagePath = imagePath,
@@ -106,6 +149,7 @@ class ScanViewModel(
         growingMethod = method,
         modelVersion = "2.0.0",
         results = results,
+        inferenceTimeMs = inferenceTimeMs,
     )
 
     companion object {

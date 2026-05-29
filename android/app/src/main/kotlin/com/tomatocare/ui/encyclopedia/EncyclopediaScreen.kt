@@ -149,16 +149,12 @@ private fun EncyclopediaCard(
                             style = MaterialTheme.typography.titleSmall,
                             modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
                         )
-                        // Group treatments by growing method
-                        val grouped = condition.treatments.groupBy { it.growingMethod }
-                        grouped.forEach { (_, treatmentsForMethod) ->
-                            treatmentsForMethod.forEach { t ->
-                                TreatmentCard(
-                                    treatment = t,
-                                    language = language,
-                                    modifier = Modifier.padding(bottom = 8.dp),
-                                )
-                            }
+                        condition.treatments.forEach { t ->
+                            TreatmentCard(
+                                treatment = t,
+                                language = language,
+                                modifier = Modifier.padding(bottom = 8.dp),
+                            )
                         }
                     }
                 }

@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -77,10 +79,24 @@ fun ResultScreen(
             )
         }
     ) { inner ->
-        val record = state.record
-        if (record != null) {
-            val primary = record.primary
-            if (primary != null) {
+        when {
+            state.isLoading -> Box(
+                modifier = Modifier.fillMaxSize().padding(inner),
+                contentAlignment = Alignment.Center,
+            ) { CircularProgressIndicator() }
+
+            state.errorMessage != null ->
+                ResultMessage(inner, state.errorMessage!!)
+
+            state.record == null ->
+                ResultMessage(inner, stringResource(R.string.result_not_found))
+
+            state.record?.primary == null ->
+                ResultMessage(inner, stringResource(R.string.result_no_diagnosis))
+
+            else -> {
+                val record = state.record!!
+                val primary = record.primary!!
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -140,6 +156,14 @@ fun ResultScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(top = 4.dp),
                                     )
+                                    record.inferenceTimeMs?.let { ms ->
+                                        Text(
+                                            text = stringResource(R.string.result_inference_time, ms),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 2.dp),
+                                        )
+                                    }
                                     Spacer(Modifier.height(8.dp))
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         StressBadge(primary.stressType)
@@ -250,5 +274,23 @@ fun ResultScreen(
                 }
             }
         }
+    }
+}
+
+/** Centered single-line message for loading-error / not-found / no-diagnosis states. */
+@Composable
+private fun ResultMessage(inner: PaddingValues, text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(inner)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
