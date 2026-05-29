@@ -4,7 +4,8 @@
       "Bash(git init *)",
       "Bash(git config *)",
       "Bash(wsl -d Ubuntu-22.04 bash -c ' *)",
-      "Bash(MSYS_NO_PATHCONV=1 wsl.exe -- bash -c ' *)"
+      "Bash(MSYS_NO_PATHCONV=1 wsl.exe -- bash -c ' *)",
+      "Bash(./gradlew :app:compileDebugKotlin --console=plain)"
     ]
   }
 }

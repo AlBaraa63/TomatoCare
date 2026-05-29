@@ -91,7 +91,7 @@ TomatoCare/
 ├── reports/                ← ALL report docs live here
 │   ├── README.md           ← INDEX: file map, status legend, number source-of-truth
 │   ├── FINAL_REPORT_REVISED.md   ← AUTHORITATIVE master report (Ch 1–9)
-│   ├── AUDIT_AND_VIVA_PACK.md    ← audit, 5 viva Q&A, patch log, corrected email draft
+│   ├── AUDIT_AND_VIVA_PACK.md    ← audit, 6 viva Q&A, patch log, corrected email draft
 │   ├── RECONCILIATION_CHANGELOG.md ← why abiotic/UAE model claims were cut
 │   ├── EMAIL_LOG.md        ← correspondence tracker (Yazeed ✅, Elibol awaiting)
 │   ├── PROJECT_JOURNEY.md  ← v0 first-attempt narrative (preserved verbatim)
@@ -145,7 +145,7 @@ python ml/reports/gen_fig7_2.py           # regenerate lab-vs-field bar chart
 Canonical outputs land in `ml/reports/`. Copy updated snapshots to `reports/` if needed.
 
 ### "Prepare for viva"
-Read `reports/AUDIT_AND_VIVA_PACK.md` — it has the 5 hostile-examiner questions with model
+Read `reports/AUDIT_AND_VIVA_PACK.md` — it has the 6 hostile-examiner questions with model
 answers, the full consistency audit, and the scientific story.
 
 ## What NOT to do

@@ -6,6 +6,12 @@ tomato leaf diseases on-device using a 3-stage MobileNetV3 TFLite cascade
 
 **Disease accuracy: 97.59% (lab) · 77.2% (field) — Model size: 9.87 MB — Min Android: API 26 — Zero network calls**
 
+[![Android CI](https://github.com/AlBaraa63/TomatoCare/actions/workflows/android-ci.yml/badge.svg)](https://github.com/AlBaraa63/TomatoCare/actions/workflows/android-ci.yml)
+![Min API 26](https://img.shields.io/badge/Android-API%2026%2B-3DDC84?logo=android&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-Compose-7F52FF?logo=kotlin&logoColor=white)
+![Network: none](https://img.shields.io/badge/network-none-success)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+
 ---
 
 ## Table of Contents
@@ -15,8 +21,9 @@ tomato leaf diseases on-device using a 3-stage MobileNetV3 TFLite cascade
 3. [Repository Structure](#repository-structure)
 4. [Quick Start](#quick-start)
 5. [Documentation](#documentation)
-6. [Team](#team)
-7. [License](#license)
+6. [Engineering Practices](#engineering-practices)
+7. [Team](#team)
+8. [License](#license)
 
 ---
 
@@ -99,7 +106,7 @@ TomatoCare/
 │   ├── ml-pipeline.md              # ML pipeline reference
 │   ├── android-app.md              # Android app reference
 │   ├── docker.md                   # Docker usage guide
-│   ├── functional_tests.md         # FR-01..FR-20 test matrix
+│   ├── functional_tests.md         # FR-01..FR-28 test matrix
 │   └── nfr_verification.md         # NFR sign-off procedure
 │
 ├── Dockerfile.ml                   # ML pipeline container
@@ -150,6 +157,31 @@ cd android
 ./gradlew :app:assembleDebug
 ```
 
+> **You need the 3 TFLite models first** — see below. The app **compiles and runs
+> without them**, but every scan will fail until the models are in
+> `android/app/src/main/assets/`.
+
+### Getting the models
+
+The three `.tflite` cascade models are **not committed** to git (binary
+artifacts — see `.gitignore`). Obtain them one of two ways:
+
+1. **Download a release (fastest).** Grab `stage1_leaf_float16.tflite`,
+   `stage2_tomato_float16.tflite`, and `stage3_disease_float16.tflite` from the
+   repository's [Releases](https://github.com/AlBaraa63/TomatoCare/releases)
+   page and drop them into `android/app/src/main/assets/`.
+2. **Produce them from the pipeline.** Run the ML pipeline
+   (`docs/getting-started.md` → ML track), which writes the three files to
+   `ml/models/tflite/`; then copy them into the assets folder.
+
+Verify all three are present:
+
+```bash
+ls android/app/src/main/assets/stage{1_leaf,2_tomato,3_disease}_float16.tflite
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor setup.
+
 ---
 
 ## Documentation
@@ -162,8 +194,38 @@ cd android
 | [docs/ml-pipeline.md](docs/ml-pipeline.md) | ML / QA | Stages A2–A8, config reference, training, evaluation, export |
 | [docs/android-app.md](docs/android-app.md) | Android / QA | Screens, ViewModels, inference engine, storage, bilingual system |
 | [docs/docker.md](docs/docker.md) | Everyone | Docker services, volumes, GPU support, CI usage |
-| [docs/functional_tests.md](docs/functional_tests.md) | QA | FR-01..FR-20 test matrix with steps and expected results |
+| [docs/functional_tests.md](docs/functional_tests.md) | QA | FR-01..FR-28 test matrix with steps and expected results |
 | [docs/nfr_verification.md](docs/nfr_verification.md) | QA / Architect | NFR sign-off procedure and current status |
+
+---
+
+## Engineering Practices
+
+TomatoCare is engineered to production standards, not just to demo:
+
+- **Automated CI** — every push and PR runs the unit-test suite and assembles a
+  debug APK via GitHub Actions ([workflow](.github/workflows/android-ci.yml)).
+- **Unit-tested core logic** — 42 JVM unit tests cover the ML↔app class-name
+  contract, JSON serialization **and backward compatibility**, the severity
+  heuristic, the Home dashboard statistics, and the feedback-flywheel label
+  resolution. Run: `cd android && ./gradlew :app:test`.
+- **Offline by construction** — the `INTERNET` permission is absent from the
+  manifest; there is no network code to audit. All inference runs on-device.
+- **Crash-safe storage** — scan history and settings use atomic
+  temp-file-then-rename writes, so an interrupted write never corrupts data.
+- **Robust input handling** — camera (`file://`) and gallery (`content://`)
+  images both decode safely off the main thread; a failed decode shows a
+  message instead of crashing, and result loading/empty/error states are
+  handled explicitly.
+- **Reactive settings** — theme switches apply live and a language change
+  re-applies the locale, both driven by a single reactive settings flow.
+- **On-device feedback flywheel** — users verify each diagnosis; verified images
+  export (grouped by true label + manifest) as a retraining set to close the
+  lab→field gap — entirely offline, user-owned data.
+- **Bilingual + RTL + accessibility** — every user-facing string ships in
+  English and Arabic; icons carry localised content descriptions.
+- **Reproducible builds** — Docker images for both the ML pipeline and the
+  Android build (`docker-compose.yml`).
 
 ---
 
