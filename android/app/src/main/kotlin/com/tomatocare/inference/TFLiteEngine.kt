@@ -3,6 +3,7 @@ package com.tomatocare.inference
 import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.graphics.Bitmap
+import android.util.Log
 import com.tomatocare.data.model.DiagnosisResult
 import com.tomatocare.data.model.GrowingMethod
 import com.tomatocare.data.model.InferenceOutput
@@ -73,7 +74,9 @@ class TFLiteEngine(
         val t0 = System.currentTimeMillis()
 
         // ---- Stage 1: leaf gate ----
+        val s1 = System.currentTimeMillis()
         val leafProbs = runStage(leafGate, input, TomatoClasses.LEAF_CLASS_NAMES.size)
+        val leafMs = System.currentTimeMillis() - s1
         if (leafProbs.argmax() != TomatoClasses.LEAF_INDEX) {
             return@withContext InferenceOutput(
                 results = emptyList(),
@@ -84,7 +87,9 @@ class TFLiteEngine(
         }
 
         // ---- Stage 2: tomato gate ----
+        val s2 = System.currentTimeMillis()
         val tomatoProbs = runStage(tomatoGate, input, TomatoClasses.TOMATO_CLASS_NAMES.size)
+        val tomatoMs = System.currentTimeMillis() - s2
         if (tomatoProbs.argmax() != TomatoClasses.TOMATO_INDEX) {
             return@withContext InferenceOutput(
                 results = emptyList(),
@@ -95,8 +100,14 @@ class TFLiteEngine(
         }
 
         // ---- Stage 3: disease classifier ----
+        val s3 = System.currentTimeMillis()
         val diseaseProbs = runStage(diseaseNet, input, TomatoClasses.DISEASE_CLASS_NAMES.size)
+        val diseaseMs = System.currentTimeMillis() - s3
         val elapsed = System.currentTimeMillis() - t0
+
+        // Per-stage latency for NFR-02 verification (read with: adb logcat -s TomatoCarePerf)
+        Log.d(PERF_TAG, "inference: leaf=${leafMs}ms tomato=${tomatoMs}ms " +
+            "disease=${diseaseMs}ms total=${elapsed}ms")
 
         val ranked = diseaseProbs.mapIndexed { idx, p -> idx to p }
             .sortedByDescending { it.second }
@@ -108,7 +119,7 @@ class TFLiteEngine(
         val results = ranked.mapIndexed { rank, (idx, prob) ->
             val conditionId = TomatoClasses.DISEASE_CLASS_NAMES[idx]
             val condition = treatmentRepository.getCondition(conditionId)
-            val severity = severityFor(prob, isPrimary = rank == 0,
+            val severity = SeverityHeuristic.severityFor(prob, isPrimary = rank == 0,
                                        baseSeverity = condition?.severityDefault)
             val treatments = if (condition != null) {
                 treatmentRepository.getTreatments(condition.conditionId, growingMethod)
@@ -177,34 +188,8 @@ class TFLiteEngine(
         }
     }
 
-    /**
-     * Severity heuristic: scale the condition's default severity up or down
-     * based on how confident the model is. A high-confidence detection of
-     * Late Blight stays CRITICAL; a marginal one drops to HIGH so the UI
-     * doesn't over-alarm the user.
-     */
-    private fun severityFor(
-        confidence: Float,
-        isPrimary: Boolean,
-        baseSeverity: com.tomatocare.data.model.SeverityLevel?,
-    ): com.tomatocare.data.model.SeverityLevel {
-        val base = baseSeverity
-            ?: com.tomatocare.data.model.SeverityLevel.MEDIUM
-        if (!isPrimary) return com.tomatocare.data.model.SeverityLevel.LOW
-        return when {
-            confidence >= 0.90f -> base
-            confidence >= 0.75f -> bumpDown(base, 1)
-            confidence >= 0.60f -> bumpDown(base, 2)
-            else -> com.tomatocare.data.model.SeverityLevel.LOW
-        }
-    }
-
-    private fun bumpDown(
-        s: com.tomatocare.data.model.SeverityLevel,
-        steps: Int,
-    ): com.tomatocare.data.model.SeverityLevel {
-        val ordered = com.tomatocare.data.model.SeverityLevel.values()
-        val idx = (s.ordinal - steps).coerceAtLeast(0)
-        return ordered[idx]
+    companion object {
+        /** Logcat tag for performance timing. Filter with `adb logcat -s TomatoCarePerf`. */
+        private const val PERF_TAG = "TomatoCarePerf"
     }
 }

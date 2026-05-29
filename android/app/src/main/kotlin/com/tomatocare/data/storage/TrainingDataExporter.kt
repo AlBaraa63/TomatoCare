@@ -77,9 +77,11 @@ class TrainingDataExporter(
             ZipOutputStream(os).use { zip ->
                 for (r in labelled) {
                     val fb = r.feedback ?: continue
-                    val label = (if (fb.wasCorrect) r.primary?.conditionId
-                                 else fb.correctedConditionId)?.takeIf { it.isNotBlank() }
-                        ?: "unknown"
+                    val label = resolveLabel(
+                        wasCorrect = fb.wasCorrect,
+                        predictedConditionId = r.primary?.conditionId,
+                        correctedConditionId = fb.correctedConditionId,
+                    )
                     val img = File(r.imagePath)
                     if (!img.exists()) continue
 
@@ -121,5 +123,23 @@ class TrainingDataExporter(
         } catch (e: Exception) {
             TrainingExportResult.Failure(e.message ?: "Unknown export error")
         }
+    }
+
+    companion object {
+        const val UNKNOWN_LABEL = "unknown"
+
+        /**
+         * The true training label for an exported scan: the user's correction
+         * when they marked the diagnosis wrong, otherwise the model's own
+         * primary prediction (a user-confirmed label). Falls back to
+         * [UNKNOWN_LABEL] if neither yields a usable id. Pure → unit-tested.
+         */
+        fun resolveLabel(
+            wasCorrect: Boolean,
+            predictedConditionId: String?,
+            correctedConditionId: String?,
+        ): String =
+            (if (wasCorrect) predictedConditionId else correctedConditionId)
+                ?.takeIf { it.isNotBlank() } ?: UNKNOWN_LABEL
     }
 }

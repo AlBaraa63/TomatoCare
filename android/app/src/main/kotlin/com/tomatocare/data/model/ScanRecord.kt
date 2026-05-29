@@ -14,6 +14,9 @@ data class ScanRecord(
     // answers "was this correct?". New field defaults null so existing
     // history files remain valid (ignoreUnknownKeys + encodeDefaults).
     val feedback: ScanFeedback? = null,
+    // Total on-device cascade inference time in milliseconds (NFR-02 evidence).
+    // Nullable + default for backward compatibility with older history files.
+    val inferenceTimeMs: Long? = null,
 ) {
     val primary: DiagnosisResult?
         get() = results.firstOrNull { it.isPrimary } ?: results.firstOrNull()
