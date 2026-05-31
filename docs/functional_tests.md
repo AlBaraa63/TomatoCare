@@ -33,6 +33,7 @@ or emulator run. Targets: API 26 (Android 8.0) and API 34 (Android 14).
 | FR-26  | Any time                                           | Open the Diseases (Encyclopedia) tab → type "blight" in search → expand a card                                  | List filters by name (EN or AR); expanded card shows stress badge, default severity, and treatment cards       | TBD           | TBD       |
 | FR-27  | Have ≥ 2 scans incl. ≥ 1 healthy                  | Open Home                                                                                                        | Stats row shows correct total scans, non-zero health rate, distinct condition count; disease-distribution chart renders | TBD     | TBD       |
 | FR-28  | Onboarding dialog visible on first launch          | Dismiss the dialog → relaunch the app                                                                            | Dialog does not appear again (gated by hasSeenOnboarding)                                                       | TBD           | TBD       |
+| FR-29  | On History (or Result) with a saved scan           | Tap the scan thumbnail                                                                                           | Full-screen image viewer opens; pinch-to-zoom, pan, and double-tap-to-reset work; Close (or Back) dismisses it. On History, tapping the row body (not the thumbnail) still opens the Result screen | TBD           | TBD       |
 
 ## Edge cases to spot-check
 

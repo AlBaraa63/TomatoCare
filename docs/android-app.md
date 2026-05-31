@@ -806,6 +806,7 @@ Color-coded chip for the four severity levels:
 | `OnboardingDialog` | `OnboardingDialog.kt` | One-time how-to-use dialog on first launch |
 | `GrowingMethodSelector` | `GrowingMethodSelector.kt` | Shared chip selector for the four growing methods (Result + Settings) |
 | `FeedbackCard` | `FeedbackCard.kt` | The [flywheel](#the-feedback-flywheel) "Was this correct?" prompt |
+| `FullScreenImageViewer` | `FullScreenImageViewer.kt` | Tap a scan thumbnail (History/Result) to open the full image with pinch-to-zoom, pan, and double-tap reset |
 
 ---
 
@@ -848,9 +849,11 @@ display.
 
 ## Unit tests
 
-42 JVM unit tests (no device needed) live in
-`android/app/src/test/kotlin/com/tomatocare/`. They run on every push/PR via
-[GitHub Actions CI](../.github/workflows/android-ci.yml).
+48 JVM unit tests (no device needed) live in
+`android/app/src/test/kotlin/com/tomatocare/`, plus Compose UI tests in
+`src/androidTest/`. They run on every push/PR via
+[GitHub Actions CI](../.github/workflows/android-ci.yml), which also runs Android
+Lint and a JaCoCo coverage report.
 
 | Test file | What it guards |
 |---|---|
@@ -860,6 +863,8 @@ display.
 | `FormatTest` | Timestamp formatting |
 | `FeedbackSerializationTest` | `ScanFeedback` round-trips **and legacy records without the field still decode** (flywheel backward-compat) |
 | `HomeStatsTest` | Dashboard stats incl. the health-rate metric (regression test for the `"healthy"` conditionId fix) |
+| `HistoryFilterTest` | History search (EN/AR) + severity filter logic |
+| `BadgeUiTest` (androidTest) | Compose UI test: severity / stress badges render correct labels |
 | `SeverityHeuristicTest` | Confidence → severity boundary mapping |
 | `TrainingLabelTest` | Flywheel export label resolution (prediction vs correction vs fallback) |
 

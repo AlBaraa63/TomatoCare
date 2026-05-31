@@ -25,6 +25,25 @@ documentation changes.
   explicit loading, not-found, no-diagnosis, and error states.
 
 ### Added
+- **Tap-to-view full image** — scan thumbnails on the History and Result screens
+  are now tappable, opening a full-screen viewer with pinch-to-zoom, pan, and
+  double-tap-to-reset (`FullScreenImageViewer`). Previously the photo could only
+  be seen as a small icon.
+- **Confidence-threshold slider** in Settings — exposes the previously
+  internal `confidenceThreshold` (0.50–0.90) so users control how cautious the
+  low-confidence warning is (report DR-06).
+- **Richer History** — search by condition name (EN/AR), a severity filter, and
+  each row now shows its on-device inference time.
+- **Release workflow** (`.github/workflows/release.yml`) — on a `v*` tag, builds
+  the APK and opens a draft GitHub Release for the maintainer to attach the
+  (gitignored) models and publish.
+- **Static analysis + coverage in CI** — Android Lint and a JaCoCo coverage
+  report now run on every push/PR, with reports uploaded as artifacts.
+- **Compose UI tests** (`BadgeUiTest`) plus a `HistoryFilterTest` unit test;
+  the JVM unit-test suite is now **48 tests**.
+- **ML experiment** (`ml/experiments/threshold_sweep.py`) — a selective-prediction
+  / risk–coverage sweep on the deployed Stage-3 model to evidence the 0.60
+  threshold. Runs against shipped artefacts; no retraining.
 - **Dark mode** (Light / Dark / System) with full light & dark Material 3 color
   schemes; selectable in Settings.
 - **Disease Encyclopedia** tab — searchable, bilingual browser of all conditions
@@ -34,9 +53,10 @@ documentation changes.
 - **In-app feedback flywheel** — "Was this correct?" capture on results plus a
   `TrainingDataExporter` that bundles verified images (grouped by true label +
   `manifest.json`) for retraining, fully offline.
-- **Unit-test suite expanded 23 → 42 tests:** `SeverityHeuristicTest`,
+- **Unit-test suite expanded 23 → 48 tests:** `SeverityHeuristicTest`,
   `HomeStatsTest` (incl. a health-rate regression test), `TrainingLabelTest`,
-  and `FeedbackSerializationTest` (round-trip + backward compatibility).
+  `FeedbackSerializationTest` (round-trip + backward compatibility), and
+  `HistoryFilterTest`; plus Compose UI tests (`BadgeUiTest`).
 - **GitHub Actions CI** (`.github/workflows/android-ci.yml`) — runs the unit
   tests and assembles the debug APK on every push/PR; README build badge.
 - **Inference-latency measurement (NFR-02 evidence).** Total cascade time is now

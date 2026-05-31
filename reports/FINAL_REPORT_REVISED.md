@@ -19,11 +19,13 @@ Spring 2026
 
 ## Abstract
 
-TomatoCare is an offline, artificial-intelligence (AI) powered Android application for home gardeners and small-scale tomato growers in the United Arab Emirates. Non-expert growers struggle to identify tomato leaf diseases reliably, and the diagnostic apps currently available require a constant internet connection, offer no Arabic interface, and — being single classifiers — will confidently mislabel an out-of-scope photograph (another crop, a hand, an everyday object) as a tomato disease. Such confident-but-wrong advice leads to misapplied treatments, wasted pesticides, and crop loss. TomatoCare addresses this with a safety-first design that runs entirely on-device: it first verifies that an image is a tomato leaf before it will diagnose, presents calibrated confidence, and reports its real-world performance honestly.
+TomatoCare is an offline, artificial-intelligence (AI) powered Android application for home gardeners and small-scale tomato growers in the United Arab Emirates. Non-expert growers struggle to identify tomato leaf diseases reliably, and the diagnostic apps currently available perform their analysis in the cloud, requiring a constant internet connection, and — being single classifiers — will confidently mislabel an out-of-scope photograph (another crop, a hand, an everyday object) as a tomato disease. Such confident-but-wrong advice leads to misapplied treatments, wasted pesticides, and crop loss. TomatoCare addresses this with a safety-first design that runs entirely on-device: it first verifies that an image is a tomato leaf before it will diagnose, presents calibrated confidence, and reports its real-world performance honestly.
 
-The system is a three-stage classification cascade: a leaf gate and a tomato gate (each a lightweight MobileNetV3-Small) reject non-leaf and non-tomato inputs before any diagnosis is attempted, and an eleven-class disease classifier (MobileNetV3-Large) then identifies one of ten tomato diseases or a healthy leaf. The classifier is trained on a PlantVillage-derived tomato dataset, and its confidence is calibrated by temperature scaling so that the 60% low-confidence threshold is statistically meaningful. On a held-out laboratory test set of 6,683 images the deployed cascade reaches 97.59% disease accuracy and 97.19% end-to-end accuracy; on real-world PlantDoc field photographs it reaches 77.2% end-to-end — a laboratory-to-field gap the project measures and reports openly rather than concealing. Each diagnosis is presented with the condition name in English and Arabic, a calibrated confidence score, a severity indicator (Low, Medium, High, or Critical), and treatment suggestions filtered by the user's growing method (greenhouse, open-field, hydroponic, or saline-soil); when confidence falls below 60% a Low Confidence Warning is shown instead of a result. All three models are exported to TensorFlow Lite with float16 quantisation, totalling 9.87 MB, and run fully offline without compromising accuracy.
+The system is a three-stage classification cascade: a leaf gate and a tomato gate (each a lightweight MobileNetV3-Small) reject non-leaf and non-tomato inputs before any diagnosis is attempted, and an eleven-class disease classifier (MobileNetV3-Large) then identifies one of ten tomato diseases or a healthy leaf. The classifier is trained on a PlantVillage-derived tomato dataset, and its confidence is calibrated by temperature scaling so that the 60% low-confidence threshold is statistically meaningful. On a held-out laboratory test set of 6,683 images the deployed cascade reaches 97.59% disease accuracy and 97.19% end-to-end accuracy; on real-world PlantDoc field photographs it reaches 77.2% end-to-end — a laboratory-to-field gap the project measures and reports openly rather than concealing. Each diagnosis is presented with the condition name in English and Arabic, a calibrated confidence score, a severity indicator (Low, Medium, High, or Critical), and treatment suggestions filtered by the user's growing method (greenhouse, open-field, hydroponic, or saline-soil); when confidence falls below 60% a Low Confidence Warning is shown instead of a result. All three models are exported to TensorFlow Lite with float16 quantisation, totalling 9.87 MB, and run fully offline.
 
 TomatoCare is implemented in Kotlin with Jetpack Compose, using CameraX for image capture and Kotlin Serialization to store scan history locally as a JSON file. All processing is performed on-device without any network dependency. The application supports both English and Arabic with full right-to-left layout support, and provides export and import of scan history via the Android Storage Access Framework.
+
+The principal limitation of the system is that its field accuracy (77.2% end-to-end on real-world photographs) remains below its laboratory accuracy (97.19% end-to-end); closing this laboratory-to-field gap with real collected field data, via an in-app feedback flywheel.
 
 ---
 
@@ -82,6 +84,7 @@ TomatoCare is implemented in Kotlin with Jetpack Compose, using CameraX for imag
    &nbsp;&nbsp;&nbsp;&nbsp;3.8.5 Confidence Calibration  
    &nbsp;&nbsp;&nbsp;&nbsp;3.8.6 Export and On-Device Deployment  
    3.9 Data Persistence: JSON File Storage  
+   &nbsp;&nbsp;&nbsp;&nbsp;3.9.1 Ethical Handling of User-Feedback Images  
    3.10 Development Tools and Environment  
    3.11 Conclusion  
 
@@ -106,7 +109,7 @@ TomatoCare is implemented in Kotlin with Jetpack Compose, using CameraX for imag
    &nbsp;&nbsp;&nbsp;&nbsp;5.1.4 Cross-Cutting Concerns  
    5.2 Sequence Diagram  
    5.3 State Chart Diagram  
-   5.4 Entity-Relationship Diagram (ERD)  
+   5.4 Data Model Diagram  
    5.5 JSON Schema Tree  
    5.6 Class Diagram  
    5.7 Activity Diagram  
@@ -120,6 +123,10 @@ TomatoCare is implemented in Kotlin with Jetpack Compose, using CameraX for imag
    6.2 Model Pipeline  
    6.3 On-Device Cascade Integration  
    6.4 In-App Feedback Flywheel  
+   6.5 Application Architecture and Project Structure  
+   6.6 Key Components  
+   6.7 Continuous Integration and Testing  
+   6.8 Implementation Challenges  
 
 7. [Chapter 7: Testing and Evaluation](#chapter-7-testing-and-evaluation)  
    7.1 Evaluation Framework  
@@ -133,6 +140,7 @@ TomatoCare is implemented in Kotlin with Jetpack Compose, using CameraX for imag
    7.7 Capability Statement  
    7.8 Non-Functional Verification  
    7.9 Application Testing  
+   7.10 Usability Evaluation  
 
 8. [Chapter 8: Conclusion](#chapter-8-conclusion)  
 
@@ -159,7 +167,7 @@ TomatoCare is implemented in Kotlin with Jetpack Compose, using CameraX for imag
 - Figure 11: Sequence Diagram — Diagnose Leaf
 - Figure 12: Sequence Diagram — View Past Scan
 - Figure 13: State Chart Diagram
-- Figure 14: Entity-Relationship Diagram (ERD)
+- Figure 14: Data Model Diagram
 - Figure 15: JSON Schema Tree
 - Figure 16: Class Diagram
 - Figure 17: Activity Diagram — Run Diagnosis
@@ -178,6 +186,7 @@ TomatoCare is implemented in Kotlin with Jetpack Compose, using CameraX for imag
 - Table 3: Team Roles and Responsibilities
 - Table 4: Comparison of SDLC Methodologies
 - Table 5: Sprint Timeline and Breakdown
+- Table 3.1: Stage 3 (tomato20k) Dataset Split
 - Table 4.1: AI Subsystem Functional Requirements
 - Table 4.2: AI Subsystem Non-Functional Requirements
 - Table 4.3: AI Requirements Traceability Matrix
@@ -186,7 +195,8 @@ TomatoCare is implemented in Kotlin with Jetpack Compose, using CameraX for imag
 - Table 7.3: Domain-Gap Experiments
 - Table 7.4: Non-Functional Requirement Verification (AI Subsystem)
 - Table 7.5: Application Unit-Test Coverage
-- Table 7.6: Measured On-Device Inference Latency
+- Table 7.6: On-Device Inference Latency by Device
+- Table 7.7: Usability Study Results
 - Table B.1: Functional Requirements Traceability
 - Table B.2: Non-Functional Requirements Traceability
 - Table B.3: Domain Requirements Traceability
@@ -199,9 +209,11 @@ TomatoCare is implemented in Kotlin with Jetpack Compose, using CameraX for imag
 
 The tomato (*Solanum lycopersicum*) is one of the most widely grown vegetables in the UAE, cultivated by home gardeners, small-scale farmers, and commercial greenhouse operators alike. Tomato production in the Gulf region faces challenges fundamentally different from those of temperate agriculture: summer temperatures exceeding 45 °C, saline groundwater, and intense solar radiation place tomato plants under severe physiological stress and weaken their natural defences against fungal, bacterial, and viral diseases [1].
 
+Tomato was selected as the target crop, in preference to other regional crops, for three specific reasons. First, it is among the most widely cultivated vegetables in the UAE across every grower scale — home gardens, hydroponic urban setups, and commercial greenhouses — so a tomato-specific tool reaches the largest cross-section of the intended users. Second, the tomato is disproportionately disease-prone: it is susceptible to a large number of foliar diseases whose symptoms (early blight, late blight, septoria leaf spot, bacterial spot, leaf mould, and several viruses) are visually similar, which makes accurate identification genuinely difficult for non-experts and therefore a high-value target for automated assistance. Third, the tomato is the best-resourced crop in public plant-pathology datasets — the PlantVillage corpus alone provides ten labelled tomato disease classes — which makes a rigorously evaluated eleven-class classifier feasible within a capstone timeframe, whereas most other regional crops lack labelled data of comparable depth. Narrowing the scope to a single, data-rich, high-impact crop also allowed the project to invest in safety (the rejection cascade) and honest field evaluation rather than spreading effort thinly across many crops.
+
 For the non-expert grower, the central difficulty is identifying which disease a plant is suffering from. Tomato diseases such as early blight (*Alternaria solani*), late blight (*Phytophthora infestans*), septoria leaf spot, and bacterial spot present as overlapping patterns of leaf yellowing, wilting, and necrotic spotting that are difficult to distinguish without formal training. Misidentification leads to the wrong treatment being applied, wasted agricultural inputs, and — in severe cases — complete crop loss.
 
-The diagnostic tools currently available fail to address this problem effectively. Commercial products such as Plantix and Agrio require a constant internet connection, which is not always available in rural or outdoor agricultural environments. None of the available platforms offers an Arabic-language interface — a significant accessibility barrier, given that a large proportion of the UAE's agricultural workforce is Arabic-speaking. Professional agricultural consultants, meanwhile, remain out of reach of most small-scale growers for reasons of cost and geography.
+The diagnostic tools currently available fail to address this problem effectively. Commercial products such as Plantix and Agrio perform their diagnosis in the cloud and therefore require a constant internet connection, which is not always available in rural or outdoor agricultural environments. Those that do offer an Arabic localisation still depend on connectivity for every diagnosis and provide no treatment guidance localised to UAE cultivation methods such as hydroponics or saline-soil farming. Professional agricultural consultants, meanwhile, remain out of reach of most small-scale growers for reasons of cost and geography.
 
 TomatoCare was designed and developed to fill this gap. It is a native Android application — offline, AI-powered, and accessible to any grower regardless of technical expertise, connectivity, or economic status — that enables a grower to photograph a tomato leaf and receive an instant diagnosis with treatment recommendations tailored to UAE growing conditions. TomatoCare directly supports the UAE National Food Security Strategy 2051 [2], which aims to extend the benefits of precision agriculture to small-scale growers who have traditionally been excluded from them.
 
@@ -245,12 +257,10 @@ When the top confidence meets or exceeds the threshold, the application shows th
 
 | Element | Description |
 |---|---|
-| **The Problem Of** | TomatoCare's recognition engine was developed in deliberate iterations, each responding to a measured limitation of the preceding one. An initial from-scratch convolutional network (TomatoCareNet) established feasibility at 91.17% laboratory accuracy and confirmed that the team could design and train a competitive architecture end-to-end; it was then upgraded — for the Capstone 1 prototype — to a single MobileNetV3-Large classifier extended with a `not_tomato` reject class, gaining transfer-learning accuracy and a smaller mobile footprint. That prototype, however, exposed a critical failure mode in real-world testing: non-tomato images — other crops' leaves, hands, everyday objects — were frequently classified as a tomato disease with high confidence. In an agricultural advisory context this is a safety defect, not merely an accuracy shortfall: a grower who photographs the wrong subject receives confident, wrong treatment advice. |
-| **Root Cause** | The root cause was twofold. First, a single softmax head was forced to perform two conflicting tasks simultaneously — out-of-distribution rejection and fine-grained disease discrimination — within one shared feature space, with the `not_tomato` class heavily under-represented. Second, all non-tomato training examples were clean laboratory images while the tomato examples included field photographs, so the model learned to separate images by photographic style (lab vs. field) rather than by leaf identity; a real field photograph of another plant therefore appeared as a tomato to the model. |
-| **Required Solution** | Not a better single classifier, but a different decision structure: one that verifies an input is in-domain before attempting a diagnosis, that aligns training and inference preprocessing so that photographic style cannot influence the decision, and whose confidence outputs are trustworthy enough to drive a meaningful low-confidence warning. |
-| **Affects** | Smallholder farmers and home gardeners in the UAE and the wider region, including the Arabic-speaking agricultural workforce, who lack access to professional agronomic advice and rely on tools that must function in low-connectivity field conditions. |
-| **The Impact Is** | Misapplied treatments, wasted inputs, crop loss, and — with naive classifiers — confident wrong advice on out-of-scope inputs. Downstream effects include environmental harm from unnecessary pesticide use, acceleration of pathogen resistance, and entrenched food insecurity in vulnerable populations. |
-| **A Successful Solution** | A free, fully offline, bilingual Android tool that rejects out-of-scope inputs before diagnosis (leaf gate → tomato gate → disease classifier), reports calibrated confidence, and honestly measures its laboratory-to-field performance gap. Designed for low-end devices (API 26+, ≥ 2 GB RAM) with a combined model footprint under 15 MB. |
+| **The Problem Of** | TomatoCare's recognition engine was built in three deliberate iterations, each fixing a measured flaw in the one before it. A from-scratch convolutional network (TomatoCareNet) first established feasibility at 91.17% laboratory accuracy and proved the team could design and train a competitive architecture end-to-end; it was then replaced, for the Capstone 1 prototype, by a single MobileNetV3-Large classifier extended with a `not_tomato` reject class. That prototype exposed the real problem this project sets out to solve: out-of-scope photographs — another crop's leaf, a hand, an everyday object — were labelled as a tomato disease *with high confidence*. In an agricultural advisory context this is a safety defect, not merely an accuracy shortfall — a grower who photographs the wrong subject is handed confident, wrong treatment advice, leading to misapplied pesticide and avoidable crop loss. |
+| **Root Cause** | A single softmax head was forced to perform two conflicting tasks at once — out-of-distribution rejection and fine-grained disease discrimination — within one shared feature space, with the `not_tomato` class heavily under-represented. Compounding this, all non-tomato training examples were clean laboratory images while the tomato examples included field photographs, so the model learned to separate images by photographic style (lab vs. field) rather than by leaf identity; a real field photograph of another plant therefore appeared as a tomato. |
+| **Impact** | Misapplied treatments, wasted agrochemical inputs, and crop loss for the smallholder farmers and home gardeners — including the large Arabic-speaking agricultural workforce — who lack affordable access to professional agronomic advice and rely on tools that must function in low-connectivity field conditions. Downstream effects include environmental harm from unnecessary pesticide use and the acceleration of pathogen resistance. |
+| **Solution** | A free, fully offline, bilingual Android tool that verifies an input is in-domain before diagnosing (leaf gate → tomato gate → disease classifier), aligns training and inference preprocessing so that photographic style cannot drive the decision, reports calibrated confidence, and honestly measures its laboratory-to-field performance gap. Designed for low-end devices (API 26+, ≥ 2 GB RAM) with a combined model footprint under 15 MB. |
 
 ---
 
@@ -302,7 +312,7 @@ The following capabilities are explicitly outside the scope of this project:
 
 TomatoCare makes the following contributions beyond the immediate project:
 
-1. It demonstrates that precision agricultural diagnostics can be delivered on low-end, offline devices without compromising accuracy, directly addressing the digital divide between large-scale commercial farming and smallholder agriculture in the UAE.
+1. It demonstrates that precision agricultural diagnostics can be delivered on low-end, offline devices — at high laboratory accuracy and with an honestly measured laboratory-to-field gap — directly addressing the digital divide between large-scale commercial farming and smallholder agriculture in the UAE.
 2. The three-stage cascade architecture provides a generalisable pattern for safety-correct deployment of plant-disease classifiers: by hard-rejecting out-of-domain inputs before any diagnosis is produced, the system eliminates the confident-wrong-answer failure mode that has been documented but rarely addressed in the agricultural-AI literature.
 3. The project reports an honest laboratory-to-field accuracy gap (97.19% laboratory vs. 77.2% field on a matched subset) rather than a single benchmark figure, modelling a transparency standard conspicuously absent from commercial plant-diagnostic products.
 4. By reducing the misdiagnosis that drives unnecessary pesticide application, TomatoCare addresses an environmental consequence that no currently available mobile application directly targets.
@@ -399,9 +409,9 @@ Four AI-based plant diagnostic systems were selected for detailed analysis: Farm
 
 Farmonaut is a precision agriculture platform that integrates satellite spectral tracking with smartphone-based image analysis via its Jeevn AI subsystem. The platform uses multispectral satellite data in the near-infrared and red-edge bands to detect large-scale crop anomalies, computing vegetation indices including NDVI, NDRE, EVI, SAVI, NDWI, and NDMI to assess plant health, water status, and soil conditions across entire fields [15]. Satellite imagery is delivered at 10-metre resolution at three-to-five-day intervals, with synthetic aperture radar (SAR) imagery provided irrespective of cloud cover.
 
-The Jeevn AI component uses CNNs to analyse smartphone-captured crop images, identifying diseases from the geometry of necrotic lesions, chlorotic colour variation, and fungal mycelium morphology. Diagnostic accuracy is reported at 98.32% in laboratory conditions, with an F1 score of 97.99% and approximately 90–95% in field deployment [16].
+The Jeevn AI component uses CNNs to analyse smartphone-captured crop images, identifying diseases from the geometry of necrotic lesions, chlorotic colour variation, and fungal mycelium morphology. Farmonaut's own published materials report a diagnostic accuracy of 98.32% in laboratory conditions, with an F1 score of 97.99% and approximately 90–95% in field deployment [16]; these are vendor-reported figures and, to the authors' knowledge, have not been independently verified in the peer-reviewed literature.
 
-**Limitations and Applicability to TomatoCare.** Farmonaut is fundamentally mismatched to TomatoCare's target users. It is a paid subscription service designed for large commercial agricultural operations, with satellite-based monitoring that requires fields large enough to be meaningfully resolved at 10-metre resolution — a scale incompatible with the home gardens and small plots typical of UAE smallholder cultivation [16]. Farmonaut provides no Arabic-language interface, no offline capability, and no UAE-specific treatment recommendations [14]. Its operation presupposes the cloud connectivity and commercial scale that TomatoCare is specifically designed to work without.
+**Limitations and Applicability to TomatoCare.** Farmonaut is fundamentally mismatched to TomatoCare's target users. It is a paid subscription service designed for large commercial agricultural operations, with satellite-based monitoring that requires fields large enough to be meaningfully resolved at 10-metre resolution — a scale incompatible with the home gardens and small plots typical of UAE smallholder cultivation [16]. Farmonaut performs its analysis in the cloud rather than on-device, and offers no UAE-specific treatment recommendations [14]; an Arabic-language interface could not be independently confirmed. Its operation presupposes the cloud connectivity and commercial scale that TomatoCare is specifically designed to work without.
 
 #### 2.7.2 Flora Incognita
 
@@ -411,23 +421,23 @@ Flora Incognita is a free scholarly plant identification application, research-f
 
 Flora Incognita has identified over 30,000 vascular plant species across more than 20 supported languages. A 2024 peer-reviewed validation study, conducted on an independent reference dataset in ecological survey conditions, reported a true positive rate of 98.8% [18], establishing the platform as a scientifically credible species-identification tool. The application also supports an offline mode, gamified citizen-science interactions via the Flora Capture programme, and informational fact sheets including plant toxicity data [19].
 
-**Limitations and Applicability to TomatoCare.** The principal limitation of Flora Incognita, viewed through the lens of TomatoCare, is a fundamental category mismatch: the application identifies plant species, not diseases. It would correctly identify the species as *Solanum lycopersicum* but would provide no information about any observed pathological condition [17, 18]. Its training data consists entirely of images of wild, uncultivated ecosystems and contains no diseased crop samples. The platform provides no treatment advice, no Arabic-language support, and no agronomic guidance applicable to UAE cultivation methods.
+**Limitations and Applicability to TomatoCare.** The principal limitation of Flora Incognita, viewed through the lens of TomatoCare, is a fundamental category mismatch: the application identifies plant species, not diseases. It would correctly identify the species as *Solanum lycopersicum* but would provide no information about any observed pathological condition [17, 18]. Its training data consists entirely of images of wild, uncultivated ecosystems and contains no diseased crop samples. Although the platform does offer an Arabic localisation, it provides no disease diagnosis, no treatment advice, and no agronomic guidance applicable to UAE cultivation methods. Its identification is performed server-side; the much-cited "offline mode" merely stores photographs locally for later online identification rather than running inference on the device.
 
 #### 2.7.3 Plantix
 
 *Figure 5: Plantix Application Interface*
 
-Plantix, developed by PEAT GmbH, is one of the most widely used smartphone applications for identifying plant diseases and pests. It uses CNN-based image recognition to identify diseases and pest damage from user-submitted photographs, supplemented by a peer-to-peer discussion forum. Plantix reports an identification accuracy of over 90% across a wide variety of crop species, achieved through a continuously optimised model trained on user-contributed images [16].
+Plantix, developed by PEAT GmbH, is one of the most widely used smartphone applications for identifying plant diseases and pests. It uses CNN-based image recognition to identify diseases and pest damage from user-submitted photographs, supplemented by a peer-to-peer discussion forum. Unlike the other platforms reviewed here, Plantix has been the subject of independent scholarly evaluation. A field study conducted with farmers in the Indian state of Andhra Pradesh reported an identification success rate above 90% for common crop diseases [36], and a 2022 independent evaluation of seventeen plant-disease applications found Plantix to be the only one able to identify the plant, detect the disease, maintain a plant database, and recommend a treatment — while concluding that most such applications are deficient in their core AI functionality [37].
 
-**Limitations and Applicability to TomatoCare.** Plantix is a cloud-based application that requires a stable internet connection to function — a constraint that makes it effectively unusable in rural farming communities with poor connectivity [16]. It provides no Arabic-language interface, which creates a significant accessibility barrier for the large Arabic-speaking segment of the UAE agricultural workforce. Treatment suggestions are not localised to UAE cultivation practices such as hydroponics or saline-soil farming, further limiting its practical applicability to the intended users of TomatoCare.
+**Limitations and Applicability to TomatoCare.** Plantix is a cloud-based application: every diagnosis is performed on remote servers and therefore requires a live internet connection, with only previously viewed content available offline — a constraint that makes it unreliable in rural farming communities with poor connectivity. Although Plantix does provide an Arabic localisation, its treatment suggestions are not localised to UAE cultivation practices such as hydroponics or saline-soil farming, and — like every single-classifier system — it has no mechanism to reject an out-of-scope photograph before diagnosing it, the precise safety gap that motivated TomatoCare's rejection cascade.
 
 #### 2.7.4 Agrio
 
 *Figure 6: Agrio Application Interface*
 
-Agrio is a commercial AI-based crop protection platform that combines image-based disease detection with a curated agronomy database, weather-based predictive alerts, and Integrated Pest Management advisory services. The platform reports a real-world diagnostic accuracy of approximately 91% [16]. It operates on a paid subscription model.
+Agrio is a commercial AI-based crop protection platform that combines image-based disease detection with a curated agronomy database, weather-based predictive alerts, and Integrated Pest Management advisory services. Its developer reports a real-world diagnostic accuracy of approximately 91% [16]; unlike the figure for Plantix, this claim does not appear to have been independently evaluated in the peer-reviewed literature and should be read as a vendor statement. Agrio operates on a paid subscription model.
 
-**Limitations and Applicability to TomatoCare.** Agrio shares Plantix's critical limitation: the platform requires constant internet connectivity and is effectively unusable in areas with weak network coverage [16]. It provides no Arabic-language support and offers no treatment recommendations adapted to UAE-specific cultivation methods such as hydroponic growing or saline-soil cultivation. The subscription pricing model introduces an additional financial barrier that further restricts access for the low-income smallholders who form the core user base of TomatoCare.
+**Limitations and Applicability to TomatoCare.** Agrio shares the central limitation of every cloud platform reviewed here: it uploads each image to its servers for analysis and is therefore unusable without connectivity. Its interface offers around fifteen languages, but Arabic support could not be independently confirmed. It provides no treatment recommendations adapted to UAE-specific cultivation methods such as hydroponic growing or saline-soil cultivation, and — like Plantix — performs no out-of-scope rejection before diagnosing. Its paid-subscription model introduces a financial barrier that further restricts access for the low-income smallholders who form the core user base of TomatoCare.
 
 #### 2.7.5 Comparative Analysis
 
@@ -435,16 +445,29 @@ Agrio is a commercial AI-based crop protection platform that combines image-base
 
 | Feature | TomatoCare | Farmonaut | Flora Incognita | Plantix | Agrio |
 |---|---|---|---|---|---|
-| Disease Detection via Image AI | ✓ | ✓ | ✗ | ✓ | ✓ |
-| Offline / On-Device Processing | ✓ | ✗ | Partial | ✗ | ✗ |
-| Bilingual Interface (English/Arabic) | ✓ | ✗ | ✗ | ✗ | ✗ |
-| Honest Lab-to-Field Accuracy Reporting | ✓ | ✗ | ✗ | ✗ | ✗ |
-| Free to Use | ✓ | ✗ | ✓ | ✓ | ✗ |
-| Compatible with Low-End Android Devices | ✓ | ✗ | ✓ | ✓ | ✓ |
-| Localised Treatment Recommendations (UAE) | ✓ | ✗ | ✗ | ✗ | ✗ |
-| Open Source | ✓ | ✗ | ✓ | ✗ | ✗ |
+| Disease detection via image AI | ✓ | ✓ | ✗ (species ID only) | ✓ | ✓ |
+| On-device AI inference (no connectivity required) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Out-of-scope (OOD) input rejection before diagnosis | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Calibrated confidence + low-confidence warning | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Arabic interface | ✓ (full RTL) | Unconfirmed | ✓ (partial) | ✓ | Unconfirmed |
+| Honest lab-to-field accuracy reporting | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Localised treatment recommendations (UAE) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Free to use | ✓ | ✗ | ✓ | ✓ | ✗ |
+| Open source | ✓ | ✗ | ✗ | ✗ | ✗ |
 
-The field accuracies reported for CNN-based agricultural diagnostics — approximately 95% (Farmonaut), 91% (Agrio), and 90% (Plantix) — are considerably higher than the 60–75% accuracy growers typically achieve with unaided visual inspection. These figures should nonetheless be interpreted with caution: none of the platforms reports its real-world field accuracy separately from its laboratory benchmark, so the accuracy a grower can actually expect in the field remains unknown. This lack of transparent field benchmarking is a fundamental methodological gap in both the commercial tools and much of the published literature. TomatoCare addresses it directly by reporting both a laboratory result and a measured field result on real photographs (Chapter 7), and by combining this transparency with fully offline, bilingual English/Arabic operation — a combination none of the reviewed platforms provides.
+The accuracy figures advertised for these platforms — approximately 95% for Farmonaut, 91% for Agrio, and 90% for Plantix — are considerably higher than the 60–75% a non-expert grower typically achieves by unaided visual inspection, but they must be read critically. Only the Plantix figure derives from independent, peer-reviewed evaluation [36, 37]; the Farmonaut and Agrio figures are vendor self-reports. More importantly, none of the platforms discloses its real-world field accuracy separately from its laboratory benchmark, so the accuracy a grower can actually expect in the field remains unknown. This absence of transparent field benchmarking is a methodological gap shared by the commercial tools and much of the published literature alike.
+
+A feature-by-feature tally (Table 2) nonetheless understates the distinction. The more important question is not *what the competitors lack* but *why TomatoCare is the technically stronger design* for the users it targets. Four architectural decisions separate it from every platform reviewed.
+
+**Deployment architecture — on-device versus cloud.** Farmonaut, Plantix, and Agrio all perform inference on remote servers, and Flora Incognita identifies species server-side; every one of them is therefore unusable, or degraded to cached content, when connectivity fails. TomatoCare runs all three inference stages on the device itself. This is not merely a convenience: it removes network round-trip latency, eliminates any recurring subscription or data cost, and — because no image ever leaves the handset — satisfies the data-minimisation principle of UAE Federal Decree-Law No. 45 of 2021 by construction rather than by policy (§2.8). For a grower in a low-connectivity field, an offline tool is not the better option; it is the only one that works.
+
+**Safety — rejecting out-of-scope inputs.** Each competitor is, architecturally, a single classifier: shown a photograph of another crop, a hand, or an everyday object, it returns its most probable disease label, often with high confidence. This is the exact failure mode that TomatoCare's own Capstone 1 prototype exhibited and that its two-gate rejection cascade was built to eliminate (§2.9). No reviewed platform performs any equivalent out-of-distribution rejection before diagnosing, which makes TomatoCare safer precisely where a confident-but-wrong answer is most damaging.
+
+**Trustworthy confidence.** TomatoCare's reported confidence is temperature-calibrated (§2.10), and any diagnosis below the 60% threshold is withheld in favour of an explicit Low-Confidence Warning. None of the reviewed applications exposes a calibrated confidence value or a comparable abstention mechanism; the user is handed a label, not a reliable indication of how far to trust it.
+
+**Evaluation honesty and localisation depth.** TomatoCare reports both a laboratory result and a measured field result on real photographs (Chapter 7), where the competitors publish a single, favourable benchmark. It pairs this with a complete Arabic/English right-to-left interface and treatment guidance filtered by UAE growing method (greenhouse, open-field, hydroponic, saline-soil). Plantix and Flora Incognita do offer an Arabic localisation, but neither combines it with offline operation or UAE-specific agronomy, and Flora Incognita does not diagnose disease at all.
+
+Taken together, it is not any single feature but their combination — fully on-device inference, a safety-first rejection cascade, calibrated confidence, honest field evaluation, and deep UAE localisation — that no reviewed platform matches, and that defines TomatoCare's technical contribution for the smallholder and home-grower segment it serves.
 
 ---
 
@@ -482,7 +505,7 @@ The literature review identifies four research and product gaps that together es
 
 1. **Cloud-dependent architectures that do not serve low-connectivity users.** Three of the four reviewed applications (Farmonaut, Plantix, Agrio) require a constant internet connection, making them effectively unusable in the rural and outdoor environments typical of small-scale UAE agriculture [14, 16].
 
-2. **Absence of Arabic-language support.** None of the reviewed applications offers an Arabic interface, even though Arabic speakers represent a significant proportion of the UAE agricultural workforce.
+2. **Absence of offline, Arabic-capable diagnosis.** The applications that operate offline provide no Arabic interface, while those that do offer an Arabic localisation (Plantix and Flora Incognita) perform their inference in the cloud and therefore require connectivity for every diagnosis — leaving Arabic-speaking growers in low-connectivity areas without a usable option, even though they form a significant proportion of the UAE agricultural workforce.
 
 3. **Absence of UAE-localised treatment recommendations.** The reviewed platforms provide recommendations suited to temperate-climate practice and do not address UAE-specific cultivation methods such as hydroponics, saline-soil farming, or extreme-heat management [26].
 
@@ -616,7 +639,18 @@ The cascade design, training procedure, calibration, and on-device export descri
 
 The cascade is trained from three labelled sources, each serving a distinct stage. The disease classifier (Stage 3) is trained on a tomato leaf-disease collection referred to as *tomato20k*; the gates (Stages 1 and 2) are trained on smaller balanced datasets constructed specifically to distinguish leaf from non-leaf and tomato from non-tomato. All sources are kept separate to prevent gate decisions from leaking information about disease classes.
 
-**Stage 3 — Disease Classifier (tomato20k, 11 classes).** tomato20k is a PlantVillage-derived tomato collection augmented with a powdery mildew class absent from the original PlantVillage tomato subset. The eleven classes are: `bacterial_spot`, `early_blight`, `late_blight`, `leaf_mold`, `powdery_mildew`, `septoria_leaf_spot`, `spider_mites`, `target_spot`, `tomato_mosaic_virus`, `tomato_yellow_leaf_curl_virus`, and `healthy`. The combined collection contains 25,851 training images and 6,683 held-out test images. The training split is further divided 85/15 into train and validation (seed 42, stratified per class); the held-out test set is the basis for every Stage 3 figure reported in Chapter 7.
+**Stage 3 — Disease Classifier (tomato20k, 11 classes).** tomato20k is a PlantVillage-derived tomato collection augmented with a powdery mildew class absent from the original PlantVillage tomato subset. The eleven classes are: `bacterial_spot`, `early_blight`, `late_blight`, `leaf_mold`, `powdery_mildew`, `septoria_leaf_spot`, `spider_mites`, `target_spot`, `tomato_mosaic_virus`, `tomato_yellow_leaf_curl_virus`, and `healthy`. The collection contains 32,534 images in total, partitioned into a 25,851-image training pool and a 6,683-image held-out test set; the test set is the basis for every Stage 3 figure reported in Chapter 7 and is never seen during training or early stopping. The training pool is further divided 85/15 into training and validation (seed 42, stratified per class). The resulting three-way split is summarised in Table 3.1.
+
+**Table 3.1: Stage 3 (tomato20k) Dataset Split**
+
+| Partition | Images | Approx. share | Role |
+|---|---|---|---|
+| Training | ≈ 21,973 | ≈ 68% | Weight updates (Phases 1–2) |
+| Validation | ≈ 3,878 | ≈ 12% | Early stopping, learning-rate scheduling, temperature fit |
+| Test (held-out) | 6,683 | ≈ 20% | Chapter 7 reported metrics only |
+| **Total** | **32,534** | **100%** | — |
+
+**Train/test independence and the same-plant question.** Because tomato20k is PlantVillage-derived, and PlantVillage is known to contain several photographs of the same physical leaf, it is reasonable to ask whether near-duplicate images of one plant could fall in both the training and test partitions. Exact duplicates were removed when the source datasets were merged and de-duplicated, and the split is stratified per class under a fixed seed; however, the split is not grouped by source plant, so the possibility that visually near-identical shots of the same laboratory leaf land on both sides of the train/test boundary cannot be fully excluded. This is a recognised limitation of all PlantVillage-derived evaluation, and it is a principal reason the project does not rest on the laboratory figure alone. The held-out PlantDoc field set (described below) is drawn from entirely independent sources, shares no plants or photographic provenance with the training data, and therefore provides the trustworthy measure of real-world generalisation; the laboratory-to-field gap reported in Chapter 7 should be read in that light.
 
 **Stage 2 — Tomato Gate.** Positives are tomato leaves from the above collection; negatives are non-tomato crop leaves — 4,627 PlantVillage pepper and potato images plus PlantDoc non-tomato field leaves. Including real-field PlantDoc images among the negatives is deliberate: without them, a model trained on laboratory positives and laboratory negatives would learn to separate images by photographic style (lab vs. field) rather than by leaf identity — precisely the failure mode that motivated the cascade design (§1.3).
 
@@ -670,6 +704,22 @@ JSON file storage is chosen over a relational database (such as Room or SQLite) 
 6. Android's internal storage security guarantees — sandboxed per-application access and on-device encryption on Android 10 and above — are applied to the JSON file automatically, without requiring any additional cryptographic effort from the application.
 
 The JSON file structure is an array of scan records, each containing: an integer scan identifier; the image path; an ISO 8601 timestamp; the growing method selected by the user; the model version used at scan time; and an array of diagnosis results. Each result includes the condition name, a primary-result flag, a confidence score, a severity level, a static `stress_type` label (descriptive metadata, not a separate prediction), and an array of treatment objects containing treatment type, urgency level, and bilingual recommendation strings. The full schema is presented and discussed in Chapter 5.
+
+#### 3.9.1 Ethical Handling of User-Feedback Images
+
+The in-app feedback flywheel (§6.4) invites users to confirm or correct a diagnosis and, in doing so, to contribute their own field photographs as future training data. Because those photographs are user-generated content rather than public dataset images, their handling is governed by an explicit set of ethical safeguards, aligned with the data-protection principles of UAE Federal Decree-Law No. 45 of 2021 on the Protection of Personal Data [13].
+
+**Informed consent and opt-in.** Contribution is strictly opt-in. A diagnosis is never retained as training data unless the user actively confirms or corrects it; the default behaviour stores nothing beyond the local scan history the user already controls. The feedback control states plainly that the image and its label may be reused to improve the model.
+
+**On-device by default; user-initiated transfer only.** Feedback images never leave the device automatically. They remain in the application's sandboxed internal storage and are aggregated into a training-data export only when the user explicitly invokes it through the Android Storage Access Framework, selecting the destination themselves (§6.4). The application declares no INTERNET permission, so no covert transmission path exists (§7.8).
+
+**Data minimisation.** Only the data necessary for retraining is captured: the leaf photograph, the user-confirmed class label, the growing method, and the model version. No account, contact detail, device identifier, or location is attached — satisfying the PDPL principle that processing be limited to what is necessary for the stated purpose [13].
+
+**Anonymity and the right to erasure.** Contributed images carry no personal identifier and cannot be traced to an individual user. Because every record lives in a single user-controlled JSON store and image directory, the user can delete any scan — and thereby withdraw any contribution — at any time, directly exercising the erasure right afforded to data subjects under the PDPL.
+
+**Purpose limitation.** Contributed images are used only to retrain the disease cascade on the real operating distribution; they are not repurposed for any secondary use. This narrow purpose is the basis on which consent is sought and is honoured by design rather than by policy alone.
+
+Together these safeguards let the feedback flywheel close the laboratory-to-field gap with real data (§7.5, Chapter 9) without weakening the privacy guarantees that the offline-first architecture already establishes (§2.8).
 
 ---
 
@@ -782,6 +832,14 @@ Non-functional requirements define the quality attributes the system must exhibi
 
 **NFR-10 — Localisation Quality:** All user-facing strings — including disease names, treatment recommendations, error messages, and navigation labels — shall be available in both English and Arabic. Arabic terminology shall use established botanical and agricultural usage rather than literal translation.
 
+The following three requirements refine the usability and localisation goals of NFR-05 and NFR-10 into explicit, separately verifiable accessibility criteria.
+
+**NFR-11 — Text Scaling and Font Size:** All user-facing text shall be defined in scalable-pixel (`sp`) units and shall honour the operating-system font-size setting, remaining legible and free of clipping or overlap when the system font scale is increased to at least 130%. Body text shall be no smaller than 14 sp and primary action labels no smaller than 16 sp. *Verification: inspection of layout resources for `sp` (not `dp`/`px`) usage, plus a functional test of each core screen at 100% and 130% system font scale (§7.9).*
+
+**NFR-12 — Arabic Readability and Right-to-Left Layout:** In Arabic mode the entire interface shall mirror to a right-to-left layout — including navigation order, directionally meaningful icons, and text alignment — and shall render Arabic with adequate line height using a font that supports full Arabic glyph shaping. No English text shall remain in the Arabic interface except proper nouns and Latin binomial (scientific) names. *Verification: functional test of every screen in Arabic mode for correct RTL mirroring and string completeness (§7.9); inspection of `values-ar/` parity with `values/`.*
+
+**NFR-13 — Colour Contrast:** All text and essential interface elements shall meet the WCAG 2.1 Level AA contrast standard — at least 4.5:1 for normal text and 3:1 for large text (≥ 18 pt, or 14 pt bold) and meaningful icons — in both light and dark themes. Severity shall never be communicated by colour alone; a text label shall always accompany the colour cue (WCAG 1.4.1). *Verification: measurement of foreground/background contrast ratios for each theme using a contrast analyser, recorded in the test evidence (§7.9).*
+
 ---
 
 ### 4.4 Domain Requirements
@@ -845,6 +903,8 @@ The requirements specification balances these perspectives by prioritising simpl
 ### 4.7 Use Case Diagram
 
 *Figure 9: Use Case Diagram*
+
+The use-case diagram captures the interactions between the single actor — the Grower — and the application's core functions. Because TomatoCare is a single-user, fully offline tool with no accounts or remote services, there is exactly one human actor and no external system actors. The primary use cases are *Scan Leaf* (capture via camera or select from the gallery), *View Diagnosis* (read the calibrated result, severity, and treatment advice), *Adjust Confidence Threshold*, *Browse Disease Encyclopedia*, *View and Search History*, *Provide Feedback* (confirm or correct a diagnosis, feeding the training-data flywheel), *Export/Import Data*, and *Change Settings* (language and theme). *Scan Leaf* «include»s the preprocessing-and-cascade inference step and «extend»s to a *Low-Confidence Warning* when the top calibrated probability falls below the 60% threshold. The diagram reflects the shipped navigation, including the bottom navigation bar and the Disease Encyclopedia, dark mode, and feedback features added since Capstone 1.
 
 ---
 
@@ -962,11 +1022,11 @@ The ScanSession lifecycle has four non-terminal states (Ready, Analyzing, Awaiti
 
 ---
 
-### 5.4 Entity-Relationship Diagram (ERD)
+### 5.4 Data Model Diagram
 
-*Figure 14: Entity-Relationship Diagram (ERD)*
+*Figure 14: Data Model Diagram*
 
-The ERD for TomatoCare was created using Chen notation and models the conceptual data structure of the application across five entities: `USER_SETTINGS`, `SCAN_RECORD`, `DIAGNOSIS_RESULT`, `CONDITION`, and `TREATMENT`.
+The data model diagram models the conceptual data structure of the application across five entities: `USER_SETTINGS`, `SCAN_RECORD`, `DIAGNOSIS_RESULT`, `CONDITION`, and `TREATMENT`. It is drawn in an entity-relationship style for clarity, but it deliberately describes a *conceptual* data model — one the application persists as a single nested JSON document (§5.5), not a relational database. It is therefore labelled a data model diagram rather than an entity-relationship diagram (ERD).
 
 `USER_SETTINGS` stores the user's application preferences with the following attributes: `settings_id` (primary key), `preferred_language`, `default_growing_method`, `confidence_threshold`, and `app_version`. It participates in a one-to-many *configures* relationship with `SCAN_RECORD`.
 
@@ -978,7 +1038,7 @@ The ERD for TomatoCare was created using Chen notation and models the conceptual
 
 `TREATMENT` contains localised treatment advice associated with each condition. Its attributes are: `treatment_id` (primary key), `growing_method`, `treatment_type`, `urgency_level`, `recommendation_en`, and `recommendation_ar`. It participates in a many-to-one relationship with `CONDITION`, where each condition can have multiple treatment records depending on the growing method (greenhouse, open-field, hydroponic, or saline-soil).
 
-Primary key attributes are underlined in the diagram per Chen notation conventions. Foreign keys are not shown in the ERD, as they are a physical implementation concern and belong to the relational schema rather than the conceptual data model.
+Primary-key attributes are underlined in the diagram. Foreign keys and join tables are not shown because the application does not use a relational database: these entities are serialised as a single nested JSON document (§5.5), so the diagram captures their conceptual relationships rather than a physical relational schema.
 
 ---
 
@@ -986,17 +1046,23 @@ Primary key attributes are underlined in the diagram per Chen notation conventio
 
 *Figure 15: JSON Schema Tree*
 
+The JSON schema tree shows how the conceptual data model of §5.4 is physically realised as a single nested JSON document — the form in which the application actually persists data (§3.9). The root is an array of `ScanRecord` objects; each `ScanRecord` nests its `DiagnosisResult` objects, and each result in turn nests its `Treatment` objects together with a reference to the `Condition` it identifies. User preferences are held in a separate, small settings object. The tree makes explicit that the relationships drawn in the data model diagram are represented by JSON nesting rather than by foreign keys and join tables — confirming that no relational database is required and that the on-device storage format is identical to the export format (§5.1.3).
+
 ---
 
 ### 5.6 Class Diagram
 
 *Figure 16: Class Diagram*
 
+The class diagram presents the principal Kotlin types and their relationships, grouped by architectural layer (§5.1). The Presentation layer holds the Compose screens and their `ViewModel`s (for example `ScanViewModel`, `HistoryViewModel`, and `SettingsViewModel`); the Application-Logic layer holds `ImagePreprocessor` and `TFLiteEngine`, the latter owning the three TFLite interpreters and implementing the cascade; and the Data layer holds the serialisable model classes (`ScanRecord`, `DiagnosisResult`, `Treatment`, `Condition`, `UserSettings`) alongside the local store and the `TrainingDataExporter`. The associations show each `ViewModel` depending on the inference engine and the local store rather than on one another, illustrating the unidirectional, layer-respecting dependencies that keep the inference engine free of any UI or persistence knowledge (§5.8).
+
 ---
 
 ### 5.7 Activity Diagram
 
 *Figure 17: Activity Diagram — Run Diagnosis*
+
+The activity diagram traces the control flow of a single diagnosis from capture to a stored, displayed result. After the grower captures or selects an image, the flow proceeds through preprocessing (centre-crop, resize, normalise) to the leaf gate; a decision node routes a rejected input to a *Not a Leaf* message and a retake. A passed input reaches the tomato gate, whose decision node routes rejections to a *Not a Tomato* message. Inputs that clear both gates reach the disease classifier, after which a second decision node tests the calibrated top confidence against the 60% threshold: below it, the flow shows a Low-Confidence Warning and offers a retake; at or above it, the flow looks up the growing-method-appropriate treatment, persists the scan, and renders the result. These three branch points — the two gates and the confidence test — are what make the diagram match the deployed cascade behaviour.
 
 ---
 
@@ -1063,6 +1129,84 @@ No INTERNET permission is declared in the Android manifest. The bundled assets a
 To close the laboratory-to-field gap with real data over time, the application implements a lightweight feedback mechanism. After each diagnosis, the results screen offers a one-tap "Was this correct?" confirm-or-correct control. The outcome is stored on the local `ScanRecord`, and a background exporter (`TrainingDataExporter.kt`) packages the labelled photographs into a ZIP organised by `correctedConditionId/` subfolder — the exact directory layout that the training pipeline's `image_dataset_from_directory` expects. The ZIP can be copied off the device via the Android Storage Access Framework and fed back into a future training run without any reformatting or relabelling step.
 
 *Figure 6.1 — [Placeholder: DCGAN synthetic bacterial-spot leaf samples generated at training epoch 150 (8×8 grid, 64 samples). Training was stable with no mode collapse, yet these synthetic images reproduce the laboratory distribution (uniform white background, studio lighting) rather than field conditions — a finding that explains why adding them to the training set produced no gain in field recall, as reported in §7.5. Image file `reports/figures/gan_samples_epoch150.png`; insert here when finalising.]*
+
+### 6.5 Application Architecture and Project Structure
+
+The Android application follows the three-layer, offline-first architecture introduced in §5.1 — a Presentation layer (Jetpack Compose UI and per-screen `ViewModel`s), an Application-Logic layer (the inference engine), and a Data layer (local JSON persistence) — wired together by a single hand-rolled dependency container, `AppContainer`, created once in `TomatoCareApp.onCreate()`. Dependencies (the inference engine, repositories, storage managers, and the settings store) are constructed there and surfaced to the `ViewModel`s through the `Application` reference, which avoids imposing a heavyweight dependency-injection framework on a small single-process application. The container also fires one warm-up inference on a blank bitmap at start-up, so the first real scan does not pay the one-time native-library and JIT cost.
+
+The source tree is organised by architectural layer and, within the UI layer, by feature:
+
+```
+com/tomatocare/
+├── TomatoCareApp.kt          Application — builds AppContainer; model warm-up
+├── MainActivity.kt           single activity; hosts the Compose navigation graph
+├── di/AppContainer.kt        hand-rolled dependency container
+├── ui/
+│   ├── home/                 HomeScreen, HomeViewModel, HomeStats
+│   ├── scan/                 ScanScreen, CameraScreen, CameraController, ScanViewModel
+│   ├── result/               ResultScreen, ResultViewModel
+│   ├── encyclopedia/         EncyclopediaScreen, EncyclopediaViewModel
+│   ├── history/              HistoryScreen, HistoryViewModel
+│   ├── settings/             SettingsScreen, SettingsViewModel
+│   ├── components/           reusable Compose UI (ConfidenceGauge, SeverityChip,
+│   │                         StressBadge, TreatmentCard, LowConfidenceWarning,
+│   │                         GateRejectWarning, StatCard, SimpleBarChart, FeedbackCard,
+│   │                         OnboardingDialog, FullScreenImageViewer, …)
+│   ├── navigation/           Routes, TomatoCareNavHost (bottom-navigation graph)
+│   └── theme/                Theme, Color, Type (Material 3, light + dark)
+├── inference/
+│   ├── TFLiteEngine.kt        loads the three interpreters; runs the cascade
+│   ├── ImagePreprocessor.kt   the preprocessing-parity contract (§3.8.2)
+│   ├── TomatoClasses.kt       canonical label set shared with the ML pipeline
+│   └── SeverityHeuristic.kt   confidence → severity mapping
+├── data/
+│   ├── model/                 ScanRecord, DiagnosisResult, Treatment, ConditionInfo,
+│   │                          UserSettings, ThemeMode, … (kotlinx.serialization)
+│   ├── storage/               ScanStorageManager, ScanExporter, ScanImporter,
+│   │                          SettingsStore, TrainingDataExporter
+│   └── repository/            TreatmentRepository, ConditionRepository
+└── utils/                     LocaleHelper
+
+app/src/main/assets/   stage{1,2,3}_*_float16.tflite, labels.json, treatments.json, model_card.md
+app/src/main/res/      values/strings.xml (English) · values-ar/strings.xml (Arabic)
+app/src/test/          48 JVM unit tests   ·   app/src/androidTest/  Compose UI + instrumented tests
+```
+
+The build targets `minSdk = 26` (Android 8.0) and `targetSdk = 34`, compiled against JDK 17. Two settings directly protect non-functional requirements: ProGuard/R8 shrinking (`isMinifyEnabled`, `isShrinkResources`) keeps the release APK within the 50 MB budget (NFR-04), and `noCompress += "tflite"` keeps the model files uncompressed inside the APK so the runtime can memory-map them rather than allocating roughly 9.87 MB of heap at load time.
+
+### 6.6 Key Components
+
+**Presentation layer.** Each screen is a Compose function backed by a `ViewModel` that exposes an immutable UI-state data class as a `StateFlow`, following the unidirectional-data-flow pattern. `MainActivity` hosts `TomatoCareNavHost`, which defines the bottom-navigation graph (Home, Scan, Encyclopedia, History, Settings). Live image capture is handled by `CameraController` over CameraX; gallery selection shares the same downstream decode path (§6.8). All theming (Material 3, light and dark) lives in `ui/theme/`, and every user-facing string is resolved from `res/values/` and `res/values-ar/`, so the same composables render correctly in either language and layout direction.
+
+**Application-logic layer.** `TFLiteEngine` loads the three float16 interpreters once and executes the cascade described in §5.9, short-circuiting on the first gate rejection. `ImagePreprocessor` implements the byte-exact preprocessing-parity contract (§3.8.2). `SeverityHeuristic` and `TomatoClasses` were deliberately extracted as pure Kotlin units so that the most safety-critical logic — the label contract and the confidence-to-severity mapping — can be unit-tested on the JVM without a device. In simplified form, the engine's control flow is:
+
+```kotlin
+fun classify(bitmap: Bitmap, method: GrowingMethod): InferenceOutput {
+    val tensor = preprocessor.toTensor(bitmap)        // parity-checked pipeline (§3.8.2)
+    if (!leafGate.passes(tensor))   return Reject(NOT_A_LEAF)
+    if (!tomatoGate.passes(tensor)) return Reject(NOT_A_TOMATO)
+    val probs = diseaseClassifier.run(tensor)         // 11-class calibrated softmax
+    return Diagnose(probs, method)                    // severity + treatment resolved downstream
+}
+```
+
+**Data layer.** Scan records and settings are serialised with `kotlinx.serialization`. `ScanStorageManager` performs crash-safe atomic writes (write-to-temp-then-rename, §3.9), `SettingsStore` is built on DataStore and exposes settings reactively (§6.8), and the SAF-based `ScanExporter`/`ScanImporter` together with the flywheel's `TrainingDataExporter` move data on and off the device only when the user initiates it (§3.9.1).
+
+### 6.7 Continuous Integration and Testing
+
+Quality is enforced automatically rather than checked by hand at submission time. A GitHub Actions workflow (`.github/workflows/android-ci.yml`) runs on every push and pull request to `main`: it sets up JDK 17, runs the JVM unit-test suite, runs Android Lint for static analysis, generates a JaCoCo coverage report, and assembles a debug APK, uploading the test, coverage, and lint reports as build artifacts (superseded runs on the same branch are cancelled to conserve CI minutes). Because the gitignored TFLite models are loaded by name at runtime, their absence does not affect the compile-and-unit-test signal this workflow provides. A second workflow (`release.yml`) builds the APK and opens a draft GitHub Release on a `v*` tag.
+
+The unit suite comprises **48 JVM tests**. To make Android-coupled logic testable without an emulator, three pure units were extracted from their host classes — the confidence-to-severity heuristic (`SeverityHeuristic`, from `TFLiteEngine`), the home-dashboard statistics (`HomeStats`, from `HomeViewModel`), and the feedback-export label resolver (`TrainingDataExporter.resolveLabel`). The tests guard the ML↔app label contract, severity boundaries, dashboard statistics (including the health-rate regression described in §6.8), feedback round-trip and backward compatibility, history search and filter, and persistence and formatting; Compose UI tests (`BadgeUiTest`) cover badge rendering on an emulator. The full enumeration of the suite, and the black-box functional matrix of 28 cases (FR-01–FR-28), are given in §7.9 (Table 7.5).
+
+### 6.8 Implementation Challenges
+
+Assembling the application surfaced several defects whose diagnosis and resolution are themselves part of the engineering record. Three are representative.
+
+**Gallery selections crashed the application.** Captured images were decoded with `BitmapFactory.decodeFile(uri.path)`, which returns `null` for the `content://` URIs that the gallery picker supplies, producing a `NullPointerException` that broke the gallery capture path (FR-05). The fix moved decoding into `ScanViewModel`, off the main thread, reading from the content resolver and using the EXIF-aware `ImageDecoder` on API 28 and above so that orientation metadata is honoured; a failed decode now surfaces a message instead of crashing. The path is guarded by an instrumented image-validation test and a decode-failure unit case.
+
+**The Home "health rate" was permanently 0%.** The dashboard computed the health rate by counting results whose `conditionId` equalled `"tomato_healthy"`, but the canonical class identifier — shared with `assets/treatments.json` and the ML label set — is `"healthy"`. The mismatch meant no scan was ever counted as healthy. Correcting the identifier fixed the metric, and `HomeStatsTest` now pins the calculation as a regression test — a direct payoff of having extracted `HomeStats` as a pure, testable unit.
+
+**Theme and language changes required a restart.** `SettingsStore` originally exposed only a one-shot `read()`, so a change to theme or language was not observed by the running UI until the application was relaunched. It now exposes a reactive `StateFlow<UserSettings>` that `MainActivity` collects: the theme switches live on selection, and a language change re-applies the locale (via `recreate()`) so the interface — including right-to-left layout — updates immediately. This delivers the live-switching behaviour expected of a bilingual, themeable design.
 
 ---
 
@@ -1240,8 +1384,7 @@ testing of the Android code and a black-box functional test plan for the
 end-to-end user journeys.
 
 **Unit (white-box) testing.** The application's correctness-critical logic is
-covered by an automated JVM unit-test suite (42 tests) that runs without a
-device or emulator. To make Android-coupled logic testable, three pure units
+covered by an automated JVM unit-test suite of 48 tests that run without a device or emulator, complemented by Compose UI tests that run on an emulator. To make Android-coupled logic testable, three pure units
 were extracted from their host classes: the confidence-to-severity heuristic
 (`SeverityHeuristic`, from `TFLiteEngine`), the home-dashboard statistics
 (`HomeStats`, from `HomeViewModel`), and the feedback-export label resolver
@@ -1256,6 +1399,7 @@ were extracted from their host classes: the confidence-to-severity heuristic
 | `HomeStatsTest` | Dashboard statistics | health-rate on `healthy` id; distinct-condition count; localised top-conditions; records without a primary |
 | `FeedbackSerializationTest` | Flywheel data integrity | feedback round-trip; legacy records without the field decode (backward compatibility) |
 | `TrainingLabelTest` | Flywheel export labelling | confirmed prediction vs. user correction vs. fallback |
+| `HistoryFilterTest` | History search & filter | name search (EN/AR), severity filter, and their combination |
 | `ScanHistorySerializationTest`, `ScanRecordTest`, `FormatTest` | Persistence & formatting | history JSON round-trip; primary-result selection; timestamp formatting |
 
 These tests are executed on every push and pull request by a continuous
@@ -1276,6 +1420,8 @@ minimum and target API levels (API 26 and API 34); the recorded pass/fail
 results, together with integration, system, and user-acceptance testing, are
 maintained by the QA lead.
 
+**Regression evidence for the fixed defects.** Each of the three defects documented in §6.8 now has explicit evidence that its fix holds. The Home health-rate miscalculation is pinned by `HomeStatsTest`, which asserts the rate is computed against the canonical `"healthy"` identifier and would fail if the previous `"tomato_healthy"` string were reintroduced. The gallery-decode crash is covered by an instrumented image-validation and EXIF test together with a decode-failure unit case that exercises the `content://` path and asserts a graceful error state rather than a `NullPointerException`. The live theme-and-language switch is verified by functional cases in `docs/functional_tests.md` that change each setting and confirm the interface — including right-to-left re-layout — updates without an application restart. The before/after screenshots accompanying these cases form part of the on-device evidence montage (Figure 7.3).
+
 **Performance measurement.** Inference latency is the user-facing performance
 metric governed by NFR-02 (≤ 3 s on a minimum-specification device — Android API
 26, 2 GB RAM, ~Snapdragon 660 class). The application reports the total cascade
@@ -1288,16 +1434,15 @@ severity levels and the full confidence range (50%–99%). The individual readin
 in milliseconds, were: 13, 13, 20, 14, 20, 16, 13, 12, 13, 15. The summary is
 given in Table 7.6.
 
-**Table 7.6: Measured On-Device Inference Latency (n = 10 scans)**
+**Table 7.6: On-Device Inference Latency by Device**
 
-| Statistic | Total cascade inference |
-|---|---|
-| Minimum | 12 ms |
-| Median | 13.5 ms |
-| Mean | 14.9 ms |
-| Maximum | 20 ms |
-| NFR-02 budget | ≤ 3000 ms (3 s) |
-| **Result** | **Met — worst case (20 ms) ≈ 150× under budget** |
+| Device | RAM | Android (API) | Median latency | Max latency | Status |
+|---|---|---|---|---|---|
+| Samsung Galaxy S10+ (Snapdragon 855 / Exynos 9820) | 8 GB | *[confirm on device — e.g. Android 12 / API 31]* | 13.5 ms | 20 ms | Measured (n = 10) |
+| Min-spec baseline (≈ Snapdragon 660 class) | 2 GB | Android 8.0 (API 26) | — | ≪ 3000 ms (projected) | Projection — not measured |
+| *[representative low-end device]* | *2–3 GB* | *API 26–29* | *—* | *—* | Planned |
+
+Summary statistics for the measured S10+ run (n = 10): minimum 12 ms, median 13.5 ms, mean 14.9 ms, maximum 20 ms, against the NFR-02 budget of 3000 ms — a worst-case margin of roughly 150×.
 
 *Test device: Samsung Galaxy S10+, 8 GB RAM (Snapdragon 855 / Exynos 9820 class,
 2019 flagship).* The reported figure is the cascade inference time (three
@@ -1321,21 +1466,53 @@ the feedback flywheel.]*
 
 ---
 
+### 7.10 Usability Evaluation
+
+Beyond functional correctness, the application's fitness for non-expert growers is assessed through a lightweight usability study. The protocol below is designed for approximately five participants — the established threshold at which formative usability testing surfaces the large majority of severe issues — drawn from classmates and family members who are non-expert growers and including at least one Arabic-first speaker.
+
+**Consent and ethics.** Each participant gives verbal informed consent before the session; participation is voluntary and may be stopped at any time. No personal data is recorded — only task outcomes, timings, and observations — consistent with the data-handling principles of §3.9.1.
+
+**Tasks.** Each participant attempts eight representative tasks, unaided, while thinking aloud:
+
+1. Scan a tomato leaf with the camera and read the diagnosis, confidence, and treatment.
+2. Scan a non-leaf or non-tomato object and interpret the gate-rejection message.
+3. Trigger and interpret a Low-Confidence Warning (for example, a blurred or partial image).
+4. Switch the interface to Arabic, confirm the layout mirrors correctly, then switch back.
+5. Toggle dark mode.
+6. Find a specific disease in the Disease Encyclopedia using search.
+7. Open History, search or filter it, and reopen a past scan.
+8. Provide feedback on a result (confirm or correct it).
+
+**Metrics.** For each task: completion (success / success-with-difficulty / failure), time on task, and observed errors or hesitations. After all tasks, each participant completes the ten-item System Usability Scale (SUS) questionnaire, yielding a 0–100 score, plus two open questions (what was confusing; what was most useful). A mean SUS of ≥ 70 — the conventional "good" threshold — is adopted as the success criterion.
+
+**Procedure and reporting.** A facilitator introduces the study without coaching on the tasks, observes silently, records the metrics, and conducts a brief debrief. Results — per-task success rates, median task times, the aggregate SUS score, and a prioritised list of issues with remediation notes — are recorded in Table 7.7 once the sessions are complete.
+
+**Table 7.7: Usability Study Results (n ≈ 5)** — *to be completed after the sessions*
+
+| Task | Success rate | Median time | Notable issues |
+|---|---|---|---|
+| T1–T8 | *pending* | *pending* | *pending* |
+| **Mean SUS score** | *pending (target ≥ 70)* | | |
+
+At the time of writing, the protocol is finalised and participant recruitment is under way; the study is scheduled to complete before final submission, and any high-severity findings will be addressed in a follow-up iteration.
+
+---
+
 ## Chapter 8: Conclusion
 
 Tomato production in the United Arab Emirates faces challenges that differ markedly from those of temperate agriculture, and the growers most exposed to them — home gardeners and smallholders — are also those least served by existing diagnostic tools. For a non-expert, identifying which disease a tomato plant is suffering from is particularly difficult: many tomato diseases present as overlapping patterns of leaf yellowing, spotting, and necrosis that are hard to distinguish even with training. Misidentification leads to the wrong treatment, wasted pesticides, higher production costs, and, in the worst case, crop loss.
 
 TomatoCare was created to fill this gap. It is a native Android diagnostic tool that runs entirely offline, enabling any grower in the UAE with a smartphone to photograph a tomato leaf and receive an instant diagnosis with treatment guidance tailored to their growing method. Building it required more than adapting an existing classifier: the Capstone 1 prototype — a single classifier augmented with a reject class — mislabelled out-of-scope inputs (other crops, hands, everyday objects) as tomato diseases with high confidence, a safety defect rather than merely an accuracy shortfall. Correcting that failure was the central design driver of the project.
 
-The literature review in Chapter 2 identified four research and product gaps that together define the problem space. First, three of the four reviewed platforms (Farmonaut, Plantix, Agrio) require a constant internet connection and are therefore effectively unusable in the low-connectivity environments typical of UAE smallholder cultivation. Second, none of the reviewed applications offers an Arabic-language interface, a serious accessibility barrier for a large proportion of the UAE agricultural workforce. Third, none provides treatment recommendations adapted to UAE cultivation methods such as greenhouse, open-field, hydroponic, or saline-soil cultivation. Fourth, none reports its real-world field accuracy separately from its laboratory benchmark, leaving the accuracy a grower can actually expect in the field unmeasured.
+The literature review in Chapter 2 identified four research and product gaps that together define the problem space. First, three of the four reviewed platforms (Farmonaut, Plantix, Agrio) require a constant internet connection and are therefore effectively unusable in the low-connectivity environments typical of UAE smallholder cultivation. Second, none of the reviewed applications combines offline, on-device diagnosis with an Arabic-language interface; the cloud-based tools that do offer Arabic (such as Plantix) still require connectivity for every diagnosis, leaving Arabic-speaking growers in low-connectivity areas unserved. Third, none provides treatment recommendations adapted to UAE cultivation methods such as greenhouse, open-field, hydroponic, or saline-soil cultivation. Fourth, none reports its real-world field accuracy separately from its laboratory benchmark, leaving the accuracy a grower can actually expect in the field unmeasured.
 
-TomatoCare addresses all four gaps. Its AI subsystem is a three-stage cascade — a leaf gate and a tomato gate (MobileNetV3-Small) that reject out-of-scope inputs, followed by an eleven-class disease classifier (MobileNetV3-Large) covering ten tomato diseases and a healthy class. The classifier was trained on a PlantVillage-derived tomato dataset using a two-phase transfer-learning strategy and evaluated on a held-out laboratory test set, achieving 97.59% — well above the 90% accuracy target. All three models are exported to TensorFlow Lite with float16 quantisation, for a combined footprint of 9.87 MB — well under the 15 MB budget — without compromising diagnostic accuracy.
+TomatoCare addresses all four gaps. Its AI subsystem is a three-stage cascade — a leaf gate and a tomato gate (MobileNetV3-Small) that reject out-of-scope inputs, followed by an eleven-class disease classifier (MobileNetV3-Large) covering ten tomato diseases and a healthy class. The classifier was trained on a PlantVillage-derived tomato dataset using a two-phase transfer-learning strategy and evaluated on a held-out laboratory test set, achieving 97.59% — well above the 90% accuracy target. All three models are exported to TensorFlow Lite with float16 quantisation, for a combined footprint of 9.87 MB — well under the 15 MB budget.
 
 Each diagnosis displays the condition name in English and Arabic, a calibrated confidence score, and a severity indicator (Low, Medium, High, or Critical). When confidence falls below the 60% threshold, the system withholds the result and shows a Low Confidence Warning instead, so that users are not misled by uncertain predictions. Treatment recommendations are drawn from an embedded bilingual knowledge base and filtered by the user's selected growing method, keeping the advice relevant to their cultivation situation.
 
 The project was developed using an Agile SDLC organised into six sprints across Capstone 1 and Capstone 2. Agile was chosen for its suitability for the experimental nature of machine learning development and the need to integrate and test across machine learning and Android development streams. Capstone 1 covered project planning, literature review, requirements specification, system architecture, and design. The Capstone 2 implementation produced a complete, functional bilingual Android application with an embedded, fully evaluated three-stage AI cascade.
 
-TomatoCare is intentionally scoped. The application covers only tomato (*Solanum lycopersicum*) leaves and is not generalised to other crop species. It does not include cloud synchronisation, user accounts, IoT sensor integration, or iOS support. Treatment outputs are advisory recommendations and are not legally binding agrochemical prescriptions. These delimitations are appropriate to a Capstone 1 and Capstone 2 deliverable; several of them — multi-crop support and IoT integration — are identified as future development directions.
+TomatoCare is intentionally scoped. The application covers only tomato (*Solanum lycopersicum*) leaves and is not generalised to other crop species. It does not include cloud synchronisation, user accounts, IoT sensor integration, or iOS support. Crucially, TomatoCare is an advisory decision-support tool, not a replacement for professional diagnosis: its outputs are guidance intended to help a grower act sooner and more accurately, and for high-value crops or uncertain cases a qualified agronomist or plant-protection authority should still be consulted. Treatment outputs are advisory recommendations and are not legally binding agrochemical prescriptions. These delimitations are appropriate to a Capstone 1 and Capstone 2 deliverable; several of them — multi-crop support and IoT integration — are identified as future development directions.
 
 The AI subsystem contributes a safety-correct three-stage cascade (leaf gate → tomato gate → disease classifier) that hard-rejects out-of-domain inputs before any diagnosis is produced, eliminating the confident-wrong-answer failure mode observed in the Capstone 1 prototype. Measured rejection performance on the held-out evaluation set is 99.55% non-leaf rejection and 0.05% unseen-species leak rate, and confidence calibration via temperature scaling (T = 0.5889) makes the 60% low-confidence threshold statistically meaningful rather than cosmetic.
 
@@ -1364,6 +1541,16 @@ Several extensions follow directly from the findings in Chapter 7 and would mean
 6. **Re-verification of gate safety metrics.** The non-leaf and other-leaf rejection figures should be regenerated against a fresh, held-out hard-negative set alongside the deployed-model evaluation, to bring every reported safety metric under one authoritative artefact.
 
 7. **CameraX live capture and multi-crop generalisation.** Live camera capture with real-time blur and framing feedback would help users take a sharp, centred leaf photograph, directly addressing the single-leaf assumption. Beyond Capstone 2, the cascade architecture is generalisable to other crops by training crop-specific Stage 2 gates and Stage 3 classifiers — the safety-correct pattern itself transfers.
+
+Beyond these technical refinements, four practical steps would move TomatoCare from a capstone deliverable toward sustained, trustworthy real-world use:
+
+8. **A larger, UAE-specific field dataset.** Scale the flywheel collection of item 1 into a deliberate campaign that gathers and expert-labels several hundred real UAE field images per class across greenhouse, open-field, hydroponic, and saline-soil settings — the dataset the laboratory-to-field analysis (§7.5) identifies as the binding constraint on field accuracy.
+
+9. **A continuous retraining pipeline.** Formalise the feedback flywheel into a periodic retrain–evaluate–redeploy loop: aggregate the collected field images, retrain the cascade, gate the result on both the held-out laboratory metrics and a growing real-field benchmark, and ship updated `.tflite` assets only when they improve field accuracy without regressing gate safety. This turns one-off collection into a sustained, measurable improvement process (an MLOps pipeline).
+
+10. **Expert agronomist validation.** Have a qualified agronomist review a sample of the model's field diagnoses and the bilingual treatment knowledge base, validating clinical and agronomic appropriateness beyond raw classification accuracy and reinforcing the system's advisory — rather than authoritative — role.
+
+11. **Lower-end and broader device testing.** Run the latency protocol (§7.9, Table 7.6) and the usability study (§7.10) on representative low-end hardware (≈ API 26 / 2 GB RAM) and across a range of screen sizes, replacing the current min-spec projection with measured evidence and confirming the accessibility requirements (NFR-11–NFR-13) on real devices.
 
 ---
 
@@ -1439,6 +1626,10 @@ Several extensions follow directly from the findings in Chapter 7 and would mean
 
 [35] A. Motwani, "Tomato Leaves Dataset," Kaggle, 2022. [Online]. Available: https://www.kaggle.com/datasets/ashishmotwani/tomato.
 
+[36] S. Rupavatharam, A. Kennepohl, B. Kummer, and V. Parimi, "Automated plant disease diagnosis using innovative Android app (Plantix) for farmers in the Indian state of Andhra Pradesh," *Phytopathology*, vol. 108, no. 10 (Suppl.), 2018.
+
+[37] A. Siddiqua, M. A. Kabir, T. Ferdous, I. B. Ali, and L. A. Weston, "Evaluating Plant Disease Detection Mobile Applications: Quality and Limitations," *Agronomy*, vol. 12, no. 8, Art. no. 1869, 2022, doi: 10.3390/agronomy12081869.
+
 ---
 
 ## Appendix A: Experiment Configurations (Supplementary) {#appendix-a}
@@ -1506,6 +1697,9 @@ requirements appear.
 | NFR-08 | No data leaves the device | Inspection — no INTERNET; local storage only (§7.8) | Met |
 | NFR-09 | Modular, independently updatable | Inspection — layered architecture (`docs/architecture.md`) | Met by design |
 | NFR-10 | All strings in EN and AR | Inspection — `values/` + `values-ar/` parity | Met |
+| NFR-11 | Text in `sp`; legible at ≥130% font scale | Inspection (`sp` usage) + Functional test at 100%/130% | Planned |
+| NFR-12 | Full RTL mirroring + Arabic readability | Functional test (all Arabic screens) + `values-ar/` parity | Met |
+| NFR-13 | WCAG 2.1 AA contrast (4.5:1 / 3:1), both themes | Measurement (contrast analyser), both themes | Planned |
 
 **Table B.3: Domain Requirements Traceability**
 

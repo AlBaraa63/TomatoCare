@@ -205,7 +205,7 @@ TomatoCare is engineered to production standards, not just to demo:
 
 - **Automated CI** — every push and PR runs the unit-test suite and assembles a
   debug APK via GitHub Actions ([workflow](.github/workflows/android-ci.yml)).
-- **Unit-tested core logic** — 42 JVM unit tests cover the ML↔app class-name
+- **Unit-tested core logic** — 48 JVM unit tests (plus Compose UI tests) cover the ML↔app class-name
   contract, JSON serialization **and backward compatibility**, the severity
   heuristic, the Home dashboard statistics, and the feedback-flywheel label
   resolution. Run: `cd android && ./gradlew :app:test`.
