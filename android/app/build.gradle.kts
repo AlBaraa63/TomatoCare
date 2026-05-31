@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
+    jacoco
 }
 
 android {
@@ -124,4 +125,28 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+}
+
+// Coverage report for the JVM unit tests. The base `jacoco` plugin auto-instruments
+// the `testDebugUnitTest` task, so running this produces build/reports/jacoco/...
+// Run: ./gradlew :app:jacocoTestReport
+tasks.register<JacocoReport>("jacocoTestReport") {
+    dependsOn("testDebugUnitTest")
+    group = "verification"
+    description = "JaCoCo coverage report for the debug unit tests."
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+    val excludes = listOf(
+        "**/R.class", "**/R\$*.class", "**/BuildConfig.*", "**/Manifest*.*",
+        "**/*Test*.*", "**/ui/theme/**",
+    )
+    classDirectories.setFrom(
+        fileTree(layout.buildDirectory.dir("tmp/kotlin-classes/debug")) { exclude(excludes) }
+    )
+    sourceDirectories.setFrom(files("src/main/kotlin"))
+    // Point at the exact exec file (a broad buildDir fileTree trips Gradle's
+    // strict task-dependency validation against other tasks' outputs).
+    executionData.setFrom(layout.buildDirectory.file("jacoco/testDebugUnitTest.exec"))
 }
