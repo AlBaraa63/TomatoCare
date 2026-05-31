@@ -21,7 +21,7 @@ dist/
 ml/dataset/
 ml/models/checkpoints/*.keras
 ml/models/checkpoints/*.h5
-ml/models/tflite/*.tflite
+# ml/models/tflite/*.tflite
 # Keep results/ JSON files (they're small and serve as a reference run record).
 
 # Android
@@ -44,7 +44,7 @@ android/.cxx/
 
 # Model weights copied into assets are not committed — too large (CLAUDE.md
 # rule: no trained weights in git). Covers the 3-stage cascade + the old model.
-android/app/src/main/assets/*.tflite
+# android/app/src/main/assets/*.tflite
 
 # Document & Report Files (local/personal reference)
 *.docx
