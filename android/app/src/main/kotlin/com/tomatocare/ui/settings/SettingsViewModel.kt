@@ -79,6 +79,15 @@ class SettingsViewModel(
         }
     }
 
+    fun onConfidenceThresholdChanged(threshold: Float) {
+        viewModelScope.launch {
+            val clamped = threshold.coerceIn(0.50f, 0.90f)
+            val updated = _uiState.value.settings.copy(confidenceThreshold = clamped)
+            container.settingsStore.write(updated)
+            _uiState.value = _uiState.value.copy(settings = updated)
+        }
+    }
+
     fun onExportSelected(uri: Uri) {
         viewModelScope.launch {
             when (val r = container.scanExporter.export(uri)) {

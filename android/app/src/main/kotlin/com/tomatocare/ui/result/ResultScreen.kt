@@ -2,6 +2,7 @@ package com.tomatocare.ui.result
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,7 +33,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +51,7 @@ import com.tomatocare.di.AppContainer
 import com.tomatocare.ui.components.ConfidenceBar
 import com.tomatocare.ui.components.ConfidenceGauge
 import com.tomatocare.ui.components.FeedbackCard
+import com.tomatocare.ui.components.FullScreenImageViewer
 import com.tomatocare.ui.components.GrowingMethodSelector
 import com.tomatocare.ui.components.LowConfidenceWarning
 import com.tomatocare.ui.components.SeverityChip
@@ -66,6 +71,7 @@ fun ResultScreen(
         factory = ResultViewModel.factory(container, scanId)
     )
     val state by viewModel.uiState.collectAsState()
+    var showFullImage by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -122,11 +128,12 @@ fun ResultScreen(
                                 if (thumb != null) {
                                     Image(
                                         bitmap = thumb!!.asImageBitmap(),
-                                        contentDescription = null,
+                                        contentDescription = stringResource(R.string.cd_view_full_image),
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
                                             .size(100.dp)
-                                            .clip(MaterialTheme.shapes.medium),
+                                            .clip(MaterialTheme.shapes.medium)
+                                            .clickable { showFullImage = true },
                                     )
                                 } else {
                                     Box(
@@ -273,6 +280,12 @@ fun ResultScreen(
                     Spacer(Modifier.height(32.dp))
                 }
             }
+        }
+    }
+
+    if (showFullImage) {
+        state.record?.imagePath?.let { path ->
+            FullScreenImageViewer(imagePath = path, onDismiss = { showFullImage = false })
         }
     }
 }

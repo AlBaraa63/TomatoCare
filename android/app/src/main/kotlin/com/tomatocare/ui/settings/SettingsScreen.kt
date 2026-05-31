@@ -24,6 +24,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -160,6 +161,48 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f)
                         )
                     }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            SettingsSectionTitle(stringResource(R.string.settings_diagnosis))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.settings_confidence_threshold),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "${(state.settings.confidenceThreshold * 100).toInt()}%",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    // Local slider state so dragging is smooth; persisted on release.
+                    var threshold by remember(state.settings.confidenceThreshold) {
+                        mutableStateOf(state.settings.confidenceThreshold)
+                    }
+                    Slider(
+                        value = threshold,
+                        onValueChange = { threshold = it },
+                        onValueChangeFinished = {
+                            viewModel.onConfidenceThresholdChanged(threshold)
+                        },
+                        valueRange = 0.50f..0.90f,
+                        steps = 7,   // 0.50, 0.55 … 0.90
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_confidence_threshold_help),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 

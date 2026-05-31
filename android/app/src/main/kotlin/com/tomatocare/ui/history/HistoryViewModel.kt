@@ -3,7 +3,9 @@ package com.tomatocare.ui.history
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.tomatocare.data.model.Language
 import com.tomatocare.data.model.ScanRecord
+import com.tomatocare.data.model.SeverityLevel
 import com.tomatocare.di.AppContainer
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,9 +17,25 @@ import kotlinx.coroutines.launch
 
 data class HistoryUiState(
     val isLoading: Boolean = true,
-    val records: List<ScanRecord> = emptyList(),
-    val language: com.tomatocare.data.model.Language = com.tomatocare.data.model.Language.ENGLISH,
-)
+    val allRecords: List<ScanRecord> = emptyList(),
+    val query: String = "",
+    val severityFilter: SeverityLevel? = null,   // null = all severities
+    val language: Language = Language.ENGLISH,
+) {
+    /** Records after applying the search query and severity filter. */
+    val records: List<ScanRecord>
+        get() = allRecords.filter { r ->
+            val primary = r.primary
+            val matchesQuery = query.isBlank() || run {
+                val name = if (language == Language.ARABIC) primary?.conditionNameAr
+                           else primary?.conditionNameEn
+                name?.contains(query.trim(), ignoreCase = true) == true
+            }
+            val matchesSeverity = severityFilter == null ||
+                primary?.severityLevel == severityFilter
+            matchesQuery && matchesSeverity
+        }
+}
 
 sealed interface HistoryEvent {
     data class RecordDeleted(val record: ScanRecord) : HistoryEvent
@@ -37,12 +55,21 @@ class HistoryViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             val all = container.scanStorageManager.loadAll()
             val settings = container.settingsStore.read()
-            _uiState.value = HistoryUiState(
+            // copy() preserves the active query / severity filter across refresh.
+            _uiState.value = _uiState.value.copy(
                 isLoading = false,
-                records = all,
+                allRecords = all,
                 language = settings.language,
             )
         }
+    }
+
+    fun onQueryChanged(query: String) {
+        _uiState.value = _uiState.value.copy(query = query)
+    }
+
+    fun onSeverityFilterChanged(severity: SeverityLevel?) {
+        _uiState.value = _uiState.value.copy(severityFilter = severity)
     }
 
     fun delete(record: ScanRecord) {

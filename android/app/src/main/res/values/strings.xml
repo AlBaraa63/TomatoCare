@@ -30,6 +30,9 @@
     <string name="action_back">Back</string>
     <string name="action_capture">Capture</string>
     <string name="action_open_gallery">Open gallery</string>
+    <string name="action_close">Close</string>
+    <string name="cd_full_image">Full scan image</string>
+    <string name="cd_view_full_image">View full image</string>
     <string name="action_pick_from_gallery">Pick from gallery</string>
     <string name="action_grant_permission">Grant camera permission</string>
     <string name="action_retake">Retake</string>
@@ -115,6 +118,10 @@
 
     <!-- History -->
     <string name="history_empty">No scans yet. Take your first photo from the home screen.</string>
+    <string name="history_search_hint">Search conditions</string>
+    <string name="history_no_matches">No scans match your search.</string>
+    <string name="filter_all">All</string>
+    <string name="latency_ms">%1$d ms</string>
 
     <!-- Settings -->
     <string name="settings_appearance">Appearance</string>
@@ -123,6 +130,9 @@
     <string name="theme_mode_light">Light</string>
     <string name="theme_mode_dark">Dark</string>
     <string name="theme_mode_system">System</string>
+    <string name="settings_diagnosis">Diagnosis</string>
+    <string name="settings_confidence_threshold">Low-confidence threshold</string>
+    <string name="settings_confidence_threshold_help">Below this confidence the app shows a warning instead of a diagnosis. Higher is more cautious.</string>
     <string name="settings_default_growing_method">Default Growing Method</string>
     <string name="settings_data_management">Data Management</string>
     <string name="settings_about_blurb">TomatoCare runs completely offline. Your images and scans never leave your device.</string>

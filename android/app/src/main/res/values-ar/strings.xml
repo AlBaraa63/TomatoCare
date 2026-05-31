@@ -33,6 +33,9 @@
     <string name="action_settings">الإعدادات</string>
     <string name="action_back">رجوع</string>
     <string name="action_open_gallery">فتح المعرض</string>
+    <string name="action_close">إغلاق</string>
+    <string name="cd_full_image">صورة الفحص الكاملة</string>
+    <string name="cd_view_full_image">عرض الصورة كاملة</string>
     <string name="action_capture">التقاط</string>
     <string name="action_pick_from_gallery">اختيار من المعرض</string>
     <string name="action_grant_permission">منح إذن الكاميرا</string>
@@ -111,6 +114,10 @@
     <string name="feedback_corrected_to">لقد صحّحته إلى: %s</string>
 
     <string name="history_empty">لا توجد فحوص بعد. التقط أول صورة من الشاشة الرئيسية.</string>
+    <string name="history_search_hint">ابحث عن الأمراض</string>
+    <string name="history_no_matches">لا توجد فحوص تطابق بحثك.</string>
+    <string name="filter_all">الكل</string>
+    <string name="latency_ms">%1$d م.ث</string>
 
     <string name="settings_language">اللغة</string>
     <string name="settings_default_growing_method">طريقة الزراعة الافتراضية</string>
@@ -142,6 +149,9 @@
     <string name="theme_mode_light">فاتح</string>
     <string name="theme_mode_dark">داكن</string>
     <string name="theme_mode_system">النظام</string>
+    <string name="settings_diagnosis">التشخيص</string>
+    <string name="settings_confidence_threshold">حد الثقة المنخفضة</string>
+    <string name="settings_confidence_threshold_help">عند ثقة أقل من هذا الحد يعرض التطبيق تحذيرًا بدلاً من التشخيص. القيمة الأعلى أكثر حذرًا.</string>
 
     <string name="scan_stage_leaf">اكتشاف ورقة...</string>
     <string name="scan_stage_tomato">التحقق من الطماطم...</string>
