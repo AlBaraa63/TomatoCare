@@ -1,31 +1,6 @@
-"""A6.5 — Post-hoc temperature scaling calibration.
-
-Loads stage2_best.keras, collects pre-softmax logits on the val set, fits
-a single scalar temperature T that minimises NLL of the softmax(logits/T)
-distribution, then re-saves the model with T baked in as a Lambda layer
-between the Dense and softmax. The Android side needs zero changes — the
-calibrated .tflite still has shape [1, num_classes] and still outputs
-softmax probabilities; they're just better calibrated.
-
-Why temperature scaling and not Platt scaling / isotonic / etc:
-  - Temperature is a single parameter — provably won't change argmax, so
-    classification accuracy is preserved exactly. Multi-parameter methods
-    can rerank classes and erode the accuracy we worked to earn.
-  - It's the standard for deep classifiers (Guo et al, "On Calibration of
-    Modern Neural Networks", 2017).
-
-Why "baked in" rather than applied at inference on Android:
-  - One place to store T (the model file itself), so Android can't get out
-    of sync. Bumping model_version forces a rebuild; T travels with it.
-  - The TFLite converter walks the Keras graph, so the Lambda(x/T) layer
-    becomes a single DIV op — no runtime overhead worth measuring.
-
-Outputs:
-  - ml/models/checkpoints/stage2_calibrated.keras
-  - ml/results/calibration.json    (T, NLL before/after, ECE before/after)
-  - ml/results/reliability_diagram.png
-
-Caching: skips if stage2_calibrated.keras already exists.
+"""TomatoCare — Post-hoc Temperature Scaling Calibration
+Fits a single scaling factor T to validation logits to align prediction confidence
+with real-world accuracies. T is saved inside the final Keras model division layer.
 """
 from __future__ import annotations
 
@@ -42,34 +17,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils.seed import load_config, project_root, set_seed  # noqa: E402
 
 
-def banner_script(purpose: str, device: str) -> None:
-    print("##############################################################")
-    print(f"  TomatoCare — {purpose}")
-    print(f"  Device : {device}")
-    print(f"  Seed   : 42")
-    print("##############################################################")
 
 
-def banner_phase(name: str) -> None:
-    print("==============================================================")
-    print(f"  PHASE: {name}")
-    print("==============================================================")
 
-
-def banner_step(step_id: str, desc: str, **params) -> None:
-    print("--------------------------------------------------------------")
-    print(f"  [{step_id}] {desc}")
-    if params:
-        print("  " + "  |  ".join(f"{k}: {v}" for k, v in params.items()))
-    print("--------------------------------------------------------------")
-
-
+# Standard softmax helper to convert raw scores (logits) into probability percentages
 def _softmax_np(x: np.ndarray, axis: int = -1) -> np.ndarray:
     x = x - x.max(axis=axis, keepdims=True)
     e = np.exp(x)
     return e / e.sum(axis=axis, keepdims=True)
 
 
+# Calculates the prediction loss (Negative Log Likelihood). We want to minimize this.
 def _nll(logits: np.ndarray, labels: np.ndarray, T: float) -> float:
     """Mean negative log-likelihood of softmax(logits/T) at the true class."""
     probs = _softmax_np(logits / T)
@@ -78,13 +36,8 @@ def _nll(logits: np.ndarray, labels: np.ndarray, T: float) -> float:
     return float(-np.log(probs[np.arange(len(labels)), labels]).mean())
 
 
+# Expected Calibration Error helper to measure how well confidence matches accuracy
 def _ece(probs: np.ndarray, labels: np.ndarray, n_bins: int = 15) -> float:
-    """Expected Calibration Error.
-
-    Bin predictions by their argmax-confidence and compare bin accuracy to
-    bin mean confidence. Lower is better; a perfectly calibrated model
-    would score 0.
-    """
     conf = probs.max(axis=1)
     pred = probs.argmax(axis=1)
     correct = (pred == labels).astype(np.float32)
@@ -101,6 +54,7 @@ def _ece(probs: np.ndarray, labels: np.ndarray, n_bins: int = 15) -> float:
     return float(ece)
 
 
+# Runs optimization using L-BFGS to find the best temperature scalar T
 def _fit_temperature(logits: np.ndarray, labels: np.ndarray,
                      max_iter: int = 50) -> float:
     """Fit T via scipy LBFGS. T is constrained > 0 via parameterisation."""
@@ -119,14 +73,9 @@ def _fit_temperature(logits: np.ndarray, labels: np.ndarray,
     return float(np.exp(result.x[0]))
 
 
+# Temporarily changes the final model layer's activation from Softmax to Linear
+# to extract the raw, un-scaled scores (logits) from the network
 def _build_logits_model(softmax_model):
-    """Take a Keras model whose final layer has softmax activation, return a
-    NEW model that outputs the pre-softmax logits.
-
-    We do this by temporarily setting the final Dense's activation to linear,
-    re-tracing the graph, and reading the resulting tensor. The original model
-    is left untouched.
-    """
     import tensorflow as tf
     # Locate the predictions Dense layer.
     pred_layer = None
@@ -155,15 +104,9 @@ def _build_logits_model(softmax_model):
     return logits_model
 
 
+# Constructs the final calibrated model by inserting our custom TemperatureScale 
+# layer directly before the final Softmax activation layer
 def _build_calibrated_model(softmax_model, T: float):
-    """Build a NEW Keras model: backbone+head → /T → softmax. Same shape.
-
-    We construct it by reusing the softmax_model's input and reading the
-    pre-softmax tensor (obtained as in _build_logits_model), then appending
-    TemperatureScale(T) → softmax. Weights are preserved 1:1 from softmax_model.
-    Uses a proper Keras Layer (not Lambda) so the saved .keras file deserialises
-    cleanly in eval_model.py and export_tflite.py.
-    """
     import tensorflow as tf
     from utils.layers import get_temperature_scale_layer
     TemperatureScale = get_temperature_scale_layer()
@@ -182,7 +125,7 @@ def main() -> None:
     from utils.dataset_loader import build_split_dataset
 
     device = "cuda" if tf.config.list_physical_devices("GPU") else "cpu"
-    banner_script("A6.5 Temperature Scaling Calibration", device)
+    print(f"--- TomatoCare — Temperature Scaling Calibration ({device}) ---")
 
     config = load_config()
     if not (config.get("calibration") or {}).get("enabled", False):
@@ -199,7 +142,7 @@ def main() -> None:
 
     if not src_path.exists():
         raise FileNotFoundError(
-            f"{src_path} not found. Run train_stage2.py first."
+            f"{src_path} not found. Run step2_train_stage2.py first."
         )
     if dst_path.exists() and cal_path.exists():
         print(f"  >> SKIP: {dst_path} exists. Delete to re-run.")
@@ -207,14 +150,15 @@ def main() -> None:
             print(json.dumps(json.load(f), indent=2))
         return
 
-    banner_phase("Loading Stage 2 Model + Val Set")
+    print("--- Loading Stage 2 Model + Val Set ---")
+    # STEP 1: Load the Stage 2 fine-tuned model and validation dataset
     softmax_model = tf.keras.models.load_model(src_path)
     val_csv = root / config["paths"]["splits_dir"] / "val.csv"
     val_ds = build_split_dataset(val_csv, config)
-    banner_step("LD-01", "Loaded",
-                model=str(src_path), val_csv=str(val_csv))
+    print(f"Loaded model from: {src_path} | Val CSV: {val_csv}")
 
-    banner_phase("Collecting Pre-Softmax Logits on Val")
+    print("--- Collecting Pre-Softmax Logits on Val ---")
+    # STEP 2: Swap the final activation from Softmax to Linear to extract "logits" (raw scores)
     logits_model = _build_logits_model(softmax_model)
     all_logits: list[np.ndarray] = []
     all_labels: list[int] = []
@@ -224,32 +168,29 @@ def main() -> None:
         all_labels.extend(np.argmax(batch_y.numpy(), axis=1).tolist())
     logits = np.concatenate(all_logits, axis=0)
     labels = np.asarray(all_labels, dtype=np.int64)
-    banner_step("LG-01", "Logits collected",
-                n_samples=len(labels), n_classes=logits.shape[1])
+    print(f"Logits collected: {len(labels)} samples, {logits.shape[1]} classes")
 
-    banner_phase("Computing Pre-Calibration Metrics")
+    print("--- Computing Pre-Calibration Metrics ---")
+    # STEP 3: Compute initial calibration error (ECE) before applying temperature scaling
     probs_pre = _softmax_np(logits)
     nll_pre = _nll(logits, labels, T=1.0)
     ece_pre = _ece(probs_pre, labels)
-    banner_step("M-PRE", "Pre-calibration", nll=f"{nll_pre:.4f}",
-                ece=f"{ece_pre:.4f}")
+    print(f"Pre-calibration: NLL={nll_pre:.4f}, ECE={ece_pre:.4f}")
 
-    banner_phase("Fitting Temperature (LBFGS)")
+    print("--- Fitting Temperature (LBFGS) ---")
+    # STEP 4: Run optimization (L-BFGS) to find the scaling factor T that minimizes validation loss (NLL)
     max_iter = int((config.get("calibration") or {}).get("max_iter", 50))
     T = _fit_temperature(logits, labels, max_iter=max_iter)
-    banner_step("FIT-01", "Temperature found", T=f"{T:.4f}",
-                interpretation="T>1 means model was overconfident" if T > 1.0
-                else "T<1 means model was underconfident")
+    print(f"Temperature T found: {T:.4f}")
 
-    banner_phase("Computing Post-Calibration Metrics")
+    print("--- Computing Post-Calibration Metrics ---")
+    # STEP 5: Re-evaluate calibration error (ECE) with the optimized Temperature factor T
     probs_post = _softmax_np(logits / T)
     nll_post = _nll(logits, labels, T=T)
     ece_post = _ece(probs_post, labels)
-    banner_step("M-POST", "Post-calibration", nll=f"{nll_post:.4f}",
-                ece=f"{ece_post:.4f}",
-                ece_improvement=f"{(ece_pre - ece_post):+.4f}")
+    print(f"Post-calibration: NLL={nll_post:.4f}, ECE={ece_post:.4f} (ECE improvement: {(ece_pre - ece_post):+.4f})")
 
-    banner_phase("Reliability Diagram")
+    print("--- Saving Reliability Diagram ---")
     n_bins = 15
     conf_post = probs_post.max(axis=1)
     pred_post = probs_post.argmax(axis=1)
@@ -277,12 +218,16 @@ def main() -> None:
     plt.tight_layout()
     plt.savefig(diag_path, dpi=120)
     plt.close()
-    banner_step("RD-01", "Reliability diagram saved", path=str(diag_path))
+    print(f"Reliability diagram saved to: {diag_path}")
 
-    banner_phase("Baking T into Calibrated Model")
+    print("--- Baking T into Calibrated Model ---")
+    # STEP 6: Insert a custom division layer `/ T` right before the final Softmax layer.
+    # EXPLANATION FOR PRESENTATION: We divide the model's raw visual scores by our calibrated temperature T. 
+    # This adjusts the confidence scores to be realistic without changing the actual disease prediction. 
+    # By inserting it directly inside the model graph, the Android app automatically gets calibrated confidence scores.
     calibrated = _build_calibrated_model(softmax_model, T)
-    # Smoke test — output shape must equal softmax_model's output shape and
-    # argmax must be invariant to T (sanity check that scaling didn't break anything).
+    
+    # STEP 7: Sanity check to confirm temperature scaling did not alter the classification predictions (argmax)
     sample = next(iter(val_ds))[0]
     pre = softmax_model.predict(sample, verbose=0)
     post = calibrated.predict(sample, verbose=0)
@@ -290,9 +235,7 @@ def main() -> None:
         raise RuntimeError(
             f"Calibrated output shape {post.shape} != original {pre.shape}")
     same_argmax = (np.argmax(pre, axis=1) == np.argmax(post, axis=1)).mean()
-    banner_step("CHK-01", "Sanity check (argmax must be invariant)",
-                argmax_match=f"{same_argmax*100:.2f}%",
-                shape=str(post.shape))
+    print(f"Sanity check: argmax match = {same_argmax*100:.2f}% | output shape = {post.shape}")
     if same_argmax < 1.0:
         raise RuntimeError(
             "Argmax changed after temperature scaling — this should be "
@@ -300,8 +243,9 @@ def main() -> None:
             "inserted before softmax, not after."
         )
 
+    # STEP 8: Save the calibrated Keras model file (.keras)
     calibrated.save(dst_path)
-    banner_step("SAVE-01", "Calibrated model saved", path=str(dst_path))
+    print(f"Calibrated model saved to: {dst_path}")
 
     report = {
         "temperature": float(T),
@@ -316,7 +260,7 @@ def main() -> None:
     }
     with open(cal_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
-    banner_step("RPT-01", "Calibration report saved", path=str(cal_path))
+    print(f"Calibration report saved to: {cal_path}")
 
 
 if __name__ == "__main__":

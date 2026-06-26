@@ -1,11 +1,8 @@
-"""Reproducibility seeding for every training script.
-
-Called at the very start of every script that touches randomness:
-weight initialisation, data shuffles, dropout masks, augmentation
-randomisation. Pinning the seed lets us re-run a training and get
-within 0.1% of the same val accuracy, which is what makes the 90%
-target verifiable rather than just lucky.
+"""TomatoCare — Reproducibility Seeding Utilities
+Sets environmental variables and random seeds for Python, NumPy, and TensorFlow,
+ensuring bit-identical and reproducible training/evaluation executions.
 """
+from PIL import ImagePath
 from __future__ import annotations
 
 import os
@@ -13,23 +10,20 @@ import random
 
 
 def set_seed(seed: int = 42) -> None:
-    # Order matters: PYTHONHASHSEED has to be set before any module that
-    # uses dict ordering for ML purposes is touched. We also re-export it
-    # in case a sub-process spawned by tf.data inherits the env.
+    # 1. Set environment variable for Python hash randomization
     os.environ["PYTHONHASHSEED"] = str(seed)
+    # 2. Seed basic Python random module
     random.seed(seed)
 
-    # NumPy and TensorFlow imports are local so that a script can call
-    # set_seed() before doing anything else (incl. importing TF) and still
-    # get the env var set ahead of TF's internal hashing.
+    # 3. Seed NumPy random number generator
     import numpy as np
     np.random.seed(seed)
 
+    # 4. Seed TensorFlow and Keras backend generators
     import tensorflow as tf
     tf.random.set_seed(seed)
     tf.keras.utils.set_random_seed(seed)
-    # Deterministic ops trade ~10% throughput for bit-identical runs on
-    # the same GPU. Worth it for a capstone graded on reproducibility.
+    # 5. Force TensorFlow to use deterministic math operations (guarantees identical runs)
     tf.config.experimental.enable_op_determinism()
 
 
@@ -42,9 +36,9 @@ def load_config(path: str = "ml/configs/training_config.yaml") -> dict:
     from pathlib import Path
     import yaml
 
+    # 6. Resolve config file path (handles executing from different folders)
     config_path = Path(path)
     if not config_path.exists():
-        # Try resolving from project root (parent of ml/)
         alt = Path(__file__).resolve().parents[3] / path
         if alt.exists():
             config_path = alt

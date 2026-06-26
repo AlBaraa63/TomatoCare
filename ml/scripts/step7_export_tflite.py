@@ -1,18 +1,6 @@
-"""A8 — TFLite float16 export.
-
-Converts stage2_calibrated.keras (preferred) or stage2_best.keras to a
-float16-quantised .tflite. Float16 (not int8) because int8 post-training
-quantisation on fine-grained classification can drop per-class accuracy
-2-4% — unacceptable at our 90% target. Float16 typically drops <0.5% and
-roughly halves model size.
-
-After export, the script:
-  1. Verifies file size <= tflite_max_size_mb (15 MB) — exits 1 on failure.
-  2. Verifies the output shape is [1, num_classes] (catches a class-count
-     mismatch with the Android side at export time, not at runtime).
-  3. Reloads the .tflite with the TFLite Interpreter, re-runs the test set,
-     and compares accuracy to the Keras model. Drop > 1% emits a warning
-     but does not fail (the original keras eval already gated accuracy).
+"""TomatoCare — TFLite Model Export
+Converts the calibrated Keras model to TensorFlow Lite float16 format, 
+and validates output size, tensor shapes, and accuracy metrics before deployment.
 """
 from __future__ import annotations
 
@@ -29,28 +17,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils.seed import load_config, project_root, set_seed  # noqa: E402
 
 
-def banner_script(purpose: str) -> None:
-    print("##############################################################")
-    print(f"  TomatoCare — {purpose}")
-    print(f"  Device : cpu")
-    print(f"  Seed   : 42")
-    print("##############################################################")
 
 
-def banner_phase(name: str) -> None:
-    print("==============================================================")
-    print(f"  PHASE: {name}")
-    print("==============================================================")
 
-
-def banner_step(step_id: str, desc: str, **params) -> None:
-    print("--------------------------------------------------------------")
-    print(f"  [{step_id}] {desc}")
-    if params:
-        print("  " + "  |  ".join(f"{k}: {v}" for k, v in params.items()))
-    print("--------------------------------------------------------------")
-
-
+# Reads a raw image, resizes it to 224x224, and normalizes pixel values to [0, 1] for testing the TFLite model
 def _preprocess_image(path: str, img_size: int) -> np.ndarray:
     img = Image.open(path).convert("RGB").resize(
         (img_size, img_size), Image.BILINEAR)
@@ -62,7 +32,7 @@ def main() -> None:
     set_seed(42)
     import tensorflow as tf
 
-    banner_script("A8 TFLite Float16 Export")
+    print("--- TomatoCare — TFLite Float16 Export ---")
 
     config = load_config()
     root = project_root()
@@ -78,7 +48,7 @@ def main() -> None:
     else:
         raise FileNotFoundError(
             f"Neither {calibrated} nor {uncalibrated} exists. "
-            "Run train_stage2.py (and calibrate_temperature.py)."
+            "Run step2_train_stage2.py (and step3_calibrate_temperature.py)."
         )
     tflite_dir = root / config["paths"]["tflite_dir"]
     tflite_dir.mkdir(parents=True, exist_ok=True)
@@ -92,14 +62,18 @@ def main() -> None:
             f"{keras_eval} not found. Run eval_model.py first."
         )
 
-    banner_phase("Converting to TFLite (float16)")
-    from utils.layers import get_temperature_scale_layer
-    TemperatureScale = get_temperature_scale_layer()
+    print("--- Converting to TFLite (float16) ---")
+    from utils.layers import TemperatureScale
     model = tf.keras.models.load_model(
         keras_ckpt,
         custom_objects={"TemperatureScale": TemperatureScale},
         safe_mode=False,
     )
+    
+    # STEP 2: Configure the TFLite Converter to optimize and use float16 precision
+    # EXPLANATION FOR PRESENTATION: We convert the model to TensorFlow Lite format for Android. 
+    # We use Float16 Quantization, which changes 32-bit floats to 16-bit floats. This cuts the model 
+    # file size in half (from ~20MB to under 10MB) so it can run fast on budget mobile devices.
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
     converter.target_spec.supported_types = [tf.float16]
@@ -108,13 +82,10 @@ def main() -> None:
     dt = time.time() - t0
     tflite_path.write_bytes(tflite_bytes)
     size_mb = tflite_path.stat().st_size / (1024 * 1024)
-    banner_step("CV-01", "Converted",
-                seconds=f"{dt:.1f}",
-                size_mb=f"{size_mb:.2f}",
-                source_keras=str(keras_ckpt),
-                path=str(tflite_path))
+    print(f"Converted model in {dt:.1f}s | Size: {size_mb:.2f} MB | Saved to: {tflite_path}")
 
-    banner_phase("Size Gate")
+    print("--- Checking Size Gate ---")
+    # STEP 3: Verify the file size fits within requirements (e.g. <= 15MB limit)
     limit_mb = config["tflite_max_size_mb"]
     if size_mb > limit_mb:
         print(f"[FAIL] .tflite size {size_mb:.2f} MB > limit {limit_mb} MB.")
@@ -122,7 +93,8 @@ def main() -> None:
         sys.exit(1)
     print(f"  >> PASS: {size_mb:.2f} MB <= {limit_mb} MB limit.")
 
-    banner_phase("Post-Export Accuracy Check")
+    print("--- Post-Export Accuracy Check ---")
+    # STEP 4: Setup TFLite interpreter to simulate mobile execution
     test_csv = root / config["paths"]["splits_dir"] / "test.csv"
     df = pd.read_csv(test_csv)
 
@@ -132,8 +104,8 @@ def main() -> None:
     out = interpreter.get_output_details()[0]
     img_size = config["img_size"]
 
-    # Shape gate — catch a class-count mismatch with the Android side here,
-    # not at runtime in the app. The Android contract is [1, num_classes].
+    # STEP 5: Verify input/output shapes match the Android contract (e.g. [1, 224, 224, 3] and [1, 11])
+    # This acts as a compiler check before deployment.
     expected_output = (1, len(config["classes"]))
     actual_output = tuple(int(d) for d in out["shape"])
     expected_input = (1, img_size, img_size, 3)
@@ -141,18 +113,15 @@ def main() -> None:
     if actual_output != expected_output:
         print(f"[FAIL] TFLite output shape {actual_output} != "
               f"expected {expected_output}.")
-        print("       The classes list in training_config.yaml must match "
-              "the model's final Dense width. Check class count.")
         sys.exit(1)
     if actual_input != expected_input:
         print(f"[FAIL] TFLite input shape {actual_input} != "
               f"expected {expected_input}.")
-        print("       Android's ImagePreprocessor builds 224x224x3 float32 "
-              "buffers; any mismatch breaks inference.")
         sys.exit(1)
     print(f"  >> PASS: input {actual_input}, output {actual_output} match "
           "Android contract.")
 
+    # STEP 6: Run inference using the TFLite Interpreter to verify accuracy
     correct = 0
     inference_times: list[float] = []
     for _, row in df.iterrows():
@@ -173,11 +142,7 @@ def main() -> None:
         keras_acc = float(json.load(f)["overall_accuracy"])
 
     drop = keras_acc - tflite_acc
-    banner_step("AC-01", "Accuracy comparison",
-                keras=f"{keras_acc*100:.2f}%",
-                tflite=f"{tflite_acc*100:.2f}%",
-                drop=f"{drop*100:+.2f}pp",
-                avg_inference_ms=f"{mean_ms:.1f}")
+    print(f"Accuracy: Keras={keras_acc*100:.2f}% | TFLite={tflite_acc*100:.2f}% (Drop: {drop*100:+.2f}pp) | Inference: {mean_ms:.1f} ms")
 
     if drop > 0.01:
         print(f"[WARN] Accuracy drop {drop*100:.2f}pp > 1.0pp. "
@@ -201,13 +166,9 @@ def main() -> None:
     }
     with open(export_report, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
-    banner_step("RPT-01", "Export report saved", path=str(export_report))
+    print(f"Export report saved to: {export_report}")
 
-    print()
-    print("##############################################################")
-    print("  TFLite artifact ready. Next step:")
-    print(f"    cp {tflite_path} android/app/src/main/assets/")
-    print("##############################################################")
+    print(f"\nTFLite artifact ready. Copy it to your Android asset folder:\n   cp {tflite_path} android/app/src/main/assets/")
 
 
 if __name__ == "__main__":

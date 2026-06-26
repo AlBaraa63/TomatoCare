@@ -101,49 +101,18 @@ TomatoCare/
 │   └── build.gradle.kts
 │
 ├── docs/
-│   ├── getting-started.md          # new member onboarding
 │   ├── architecture.md             # system design and data flow
 │   ├── ml-pipeline.md              # ML pipeline reference
 │   ├── android-app.md              # Android app reference
-│   ├── docker.md                   # Docker usage guide
 │   ├── functional_tests.md         # FR-01..FR-28 test matrix
 │   └── nfr_verification.md         # NFR sign-off procedure
-│
-├── Dockerfile.ml                   # ML pipeline container
-├── Dockerfile.android              # Android build container
-├── docker-compose.yml              # orchestration
-└── .dockerignore
 ```
 
 ---
 
 ## Quick Start
 
-### Option A — Docker (recommended for new members)
-
-No local toolchain setup required.
-
-```bash
-# Clone
-git clone <repo-url>
-cd TomatoCare
-
-# Run ML evaluation against the pre-trained model
-docker compose run --rm ml python -m ml.scripts.eval_model
-
-# Build an Android debug APK
-docker compose --profile android run --rm android-build
-# APK lands in: android/app/build/outputs/apk/debug/
-```
-
-See [docs/docker.md](docs/docker.md) for GPU training and full workflow.
-
-### Option B — Native setup
-
-See [docs/getting-started.md](docs/getting-started.md) for step-by-step
-instructions for both the ML and Android tracks.
-
-**ML (Python 3.10, TF 2.15.1, Linux/WSL2 recommended):**
+**ML (Python 3.12, TF 2.15.1):**
 
 ```bash
 pip install -r ml/requirements.txt
@@ -170,9 +139,8 @@ artifacts — see `.gitignore`). Obtain them one of two ways:
    `stage2_tomato_float16.tflite`, and `stage3_disease_float16.tflite` from the
    repository's [Releases](https://github.com/AlBaraa63/TomatoCare/releases)
    page and drop them into `android/app/src/main/assets/`.
-2. **Produce them from the pipeline.** Run the ML pipeline
-   (`docs/getting-started.md` → ML track), which writes the three files to
-   `ml/models/tflite/`; then copy them into the assets folder.
+2. **Produce them from the pipeline.** Run the ML pipeline scripts in `ml/scripts/` 
+   which write the three files to `ml/models/tflite/`; then copy them into the assets folder.
 
 Verify all three are present:
 
@@ -180,19 +148,15 @@ Verify all three are present:
 ls android/app/src/main/assets/stage{1_leaf,2_tomato,3_disease}_float16.tflite
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor setup.
-
 ---
 
 ## Documentation
 
 | Document | Audience | What it covers |
 |---|---|---|
-| [docs/getting-started.md](docs/getting-started.md) | Everyone | Prerequisites, clone, first build for both tracks |
 | [docs/architecture.md](docs/architecture.md) | Everyone | System design, data flow, component diagram, key decisions |
 | [docs/ml-pipeline.md](docs/ml-pipeline.md) | ML / QA | Stages A2–A8, config reference, training, evaluation, export |
 | [docs/android-app.md](docs/android-app.md) | Android / QA | Screens, ViewModels, inference engine, storage, bilingual system |
-| [docs/docker.md](docs/docker.md) | Everyone | Docker services, volumes, GPU support, CI usage |
 | [docs/functional_tests.md](docs/functional_tests.md) | QA | FR-01..FR-28 test matrix with steps and expected results |
 | [docs/nfr_verification.md](docs/nfr_verification.md) | QA / Architect | NFR sign-off procedure and current status |
 
@@ -202,8 +166,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor setup.
 
 TomatoCare is engineered to production standards, not just to demo:
 
-- **Automated CI** — every push and PR runs the unit-test suite and assembles a
-  debug APK via GitHub Actions ([workflow](.github/workflows/android-ci.yml)).
 - **Unit-tested core logic** — 48 JVM unit tests (plus Compose UI tests) cover the ML↔app class-name
   contract, JSON serialization **and backward compatibility**, the severity
   heuristic, the Home dashboard statistics, and the feedback-flywheel label
@@ -223,8 +185,6 @@ TomatoCare is engineered to production standards, not just to demo:
   lab→field gap — entirely offline, user-owned data.
 - **Bilingual + RTL + accessibility** — every user-facing string ships in
   English and Arabic; icons carry localised content descriptions.
-- **Reproducible builds** — Docker images for both the ML pipeline and the
-  Android build (`docker-compose.yml`).
 
 ---
 

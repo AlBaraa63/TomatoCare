@@ -1,26 +1,6 @@
-"""A7 — Evaluation on the held-out test set (11-class + OOD).
-
-Loads stage2_calibrated.keras (preferred) or stage2_best.keras (fallback)
-and runs inference on test.csv. Computes:
-  - overall accuracy
-  - per-class precision / recall / F1
-  - macro-averaged F1
-  - 11x11 confusion matrix
-  - ECE (Expected Calibration Error) + Brier score
-  - OOD-specific metrics: binary leaf-vs-notleaf rejection recall, false-
-    reject rate, AUROC, FPR@95%TPR
-
-Saves:
-  - ml/results/eval_report.json
-  - ml/results/confusion_matrix.png
-  - ml/results/ood_failures/  (the 20 NotALeaf images that received the
-    highest tomato-class confidence — visual review reveals which negative
-    types are missing from training)
-
-Hard-fail gates (exit 1):
-  - overall_accuracy < target_accuracy        (config: target_accuracy)
-  - notaleaf_recall < notaleaf_min_recall     (config: notaleaf_min_recall)
-  - false_reject_rate > max_false_reject_rate (config: max_false_reject_rate)
+"""TomatoCare — Model Evaluation (11-Class + Out-Of-Distribution)
+Evaluates accuracy, F1 score, Expected Calibration Error (ECE), and leaf gating robustness
+on a held-out test dataset, ensuring model metrics satisfy Quality Assurance gates.
 """
 from __future__ import annotations
 
@@ -42,28 +22,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils.seed import load_config, project_root, set_seed  # noqa: E402
 
 
-def banner_script(purpose: str, device: str) -> None:
-    print("##############################################################")
-    print(f"  TomatoCare — {purpose}")
-    print(f"  Device : {device}")
-    print(f"  Seed   : 42")
-    print("##############################################################")
 
 
-def banner_phase(name: str) -> None:
-    print("==============================================================")
-    print(f"  PHASE: {name}")
-    print("==============================================================")
 
-
-def banner_step(step_id: str, desc: str, **params) -> None:
-    print("--------------------------------------------------------------")
-    print(f"  [{step_id}] {desc}")
-    if params:
-        print("  " + "  |  ".join(f"{k}: {v}" for k, v in params.items()))
-    print("--------------------------------------------------------------")
-
-
+# ECE (Expected Calibration Error): Measures how well confidence percentages match real accuracy.
+# It groups predictions into bins (e.g. 80-90% confidence) and compares bin accuracy to confidence.
 def _ece(probs: np.ndarray, labels: np.ndarray, n_bins: int = 15) -> float:
     conf = probs.max(axis=1)
     pred = probs.argmax(axis=1)
@@ -80,6 +43,8 @@ def _ece(probs: np.ndarray, labels: np.ndarray, n_bins: int = 15) -> float:
     return float(ece)
 
 
+# Brier Score: Measures prediction error (like Mean Squared Error for classification).
+# It computes the squared difference between the predicted probabilities and true labels. Lower is better.
 def _brier(probs: np.ndarray, labels: np.ndarray) -> float:
     """Multi-class Brier score: mean squared error of probs vs one-hot."""
     n, k = probs.shape
@@ -88,6 +53,8 @@ def _brier(probs: np.ndarray, labels: np.ndarray) -> float:
     return float(((probs - onehot) ** 2).sum(axis=1).mean())
 
 
+# FPR at 95% TPR: Computes the False Positive Rate when we capture 95% of the real leaves.
+# It shows how many invalid items leak through if the gate is set to be very sensitive.
 def _fpr_at_tpr(scores: np.ndarray, labels: np.ndarray,
                 target_tpr: float = 0.95) -> float:
     """For binary scores (higher = positive class), FPR at the threshold
@@ -112,24 +79,24 @@ def _resolve_model_path(ckpt_dir: Path) -> Path:
         return uncalibrated
     raise FileNotFoundError(
         f"Neither {calibrated} nor {uncalibrated} exists. "
-        "Run train_stage2.py (and calibrate_temperature.py) first."
-    )
-
-
+        "Run step2_train_stage2.py (and step3_calibrate_temperature.py) first.")
 def main() -> None:
+    # STEP 1: Set seed for absolute reproducibility
     set_seed(42)
 
     import tensorflow as tf
     from utils.dataset_loader import build_split_dataset
 
     device = "cuda" if tf.config.list_physical_devices("GPU") else "cpu"
-    banner_script("A7 Evaluation (11-class + OOD)", device)
+    print(f"--- TomatoCare — Evaluation (11-class + OOD) ({device}) ---")
 
     config = load_config()
     classes: list[str] = config["classes"]
     ood_class = (config.get("ood") or {}).get("class_name")
     ood_idx = classes.index(ood_class) if ood_class else None
     root = project_root()
+    
+    # STEP 2: Find the latest model (calibrated is preferred, uncalibrated is fallback)
     ckpt_path = _resolve_model_path(
         root / config["paths"]["checkpoints_dir"])
     results_dir = root / config["paths"]["results_dir"]
@@ -137,21 +104,22 @@ def main() -> None:
     cm_path = results_dir / "confusion_matrix.png"
     failures_dir = results_dir / "ood_failures"
 
-    banner_phase("Loading Model + Test Set")
-    from utils.layers import get_temperature_scale_layer
-    TemperatureScale = get_temperature_scale_layer()
+    print("--- Loading Model + Test Set ---")
+    # STEP 3: Load the Keras model with our custom TemperatureScale division layer
+    from utils.layers import TemperatureScale
     model = tf.keras.models.load_model(
         ckpt_path,
         custom_objects={"TemperatureScale": TemperatureScale},
         safe_mode=False,
     )
+    # Load the test CSV and prepare the dataset iterator
     test_csv = root / config["paths"]["splits_dir"] / "test.csv"
     test_ds = build_split_dataset(test_csv, config)
     df = pd.read_csv(test_csv)
-    banner_step("LD-01", "Loaded",
-                model=str(ckpt_path), test_samples=len(df))
+    print(f"Model loaded: {ckpt_path} | Test samples: {len(df)}")
 
-    banner_phase("Running Inference")
+    print("--- Running Inference ---")
+    # STEP 4: Run predictions over all test dataset batches
     all_probs: list[np.ndarray] = []
     y_true: list[int] = []
     for batch_x, batch_y in test_ds:
@@ -162,10 +130,13 @@ def main() -> None:
     y_true_np = np.asarray(y_true, dtype=np.int64)
     y_pred_np = probs.argmax(axis=1).astype(np.int64)
 
-    banner_phase("Standard Metrics")
+    print("--- Standard Metrics ---")
+    # STEP 5: Compute macro accuracy, macro F1, and per-class precision/recall/F1 metrics
+    # EXPLANATION FOR PRESENTATION: We test the model on a "held-out test set" (images the model has never 
+    # seen before during training). This gives us the true, honest accuracy and F1 score of the system.
     overall_acc = float((y_true_np == y_pred_np).mean())
     macro_f1 = float(f1_score(y_true_np, y_pred_np, average="macro",
-                              zero_division=0))
+                               zero_division=0))
     cls_report = classification_report(
         y_true_np, y_pred_np,
         labels=list(range(len(classes))),
@@ -184,26 +155,23 @@ def main() -> None:
     }
     cm = confusion_matrix(y_true_np, y_pred_np,
                           labels=list(range(len(classes))))
-    banner_step("M-01", "Overall accuracy", accuracy=f"{overall_acc*100:.2f}%")
-    banner_step("M-02", "Macro F1", macro_f1=f"{macro_f1:.4f}")
+    print(f"Overall Accuracy: {overall_acc*100:.2f}%")
+    print(f"Macro F1 Score: {macro_f1:.4f}")
     for cls in classes:
         m = per_class[cls]
-        banner_step(f"PC-{classes.index(cls):02d}", cls,
-                    precision=f"{m['precision']:.3f}",
-                    recall=f"{m['recall']:.3f}",
-                    f1=f"{m['f1']:.3f}",
-                    support=m["support"])
+        print(f"Class: {cls} | Precision: {m['precision']:.3f} | Recall: {m['recall']:.3f} | F1: {m['f1']:.3f} | Support: {m['support']}")
 
-    banner_phase("Calibration Metrics")
+    print("--- Calibration Metrics ---")
+    # STEP 6: Compute post-calibration ECE (Expected Calibration Error) and Brier Score
     ece = _ece(probs, y_true_np)
     brier = _brier(probs, y_true_np)
-    banner_step("CAL-01", "ECE / Brier", ece=f"{ece:.4f}", brier=f"{brier:.4f}")
+    print(f"ECE: {ece:.4f} | Brier score: {brier:.4f}")
 
     # ---- OOD metrics ---------------------------------------------------
     ood_metrics: dict = {}
     failures_paths: list[str] = []
     if ood_idx is not None:
-        banner_phase("OOD Reject Class Metrics")
+        print("--- OOD Reject Class Metrics ---")
         # Binary view: is this a not-a-leaf?
         bin_true = (y_true_np == ood_idx).astype(np.int64)
         # Score: probability assigned to NotALeaf class. Higher → more "OOD".
@@ -248,11 +216,7 @@ def main() -> None:
             "confidence_threshold": thresh,
             "fraction_below_threshold_per_class": per_class_low_conf,
         }
-        banner_step("OOD-01", "Reject class behaviour",
-                    notaleaf_recall=f"{notaleaf_recall*100:.2f}%",
-                    false_reject_rate=f"{frr*100:.2f}%",
-                    auroc=f"{auroc:.4f}",
-                    fpr_at_95tpr=f"{fpr_at_95:.4f}")
+        print(f"OOD Recall: {notaleaf_recall*100:.2f}% | False Reject Rate: {frr*100:.2f}% | AUROC: {auroc:.4f} | FPR@95%TPR: {fpr_at_95:.4f}")
 
         # Dump 20 hardest negative failures (true=NotALeaf, predicted=tomato
         # with high confidence) for visual review.
@@ -278,11 +242,10 @@ def main() -> None:
                     shutil.copy2(src, dst)
                     failures_paths.append(str(dst))
                 except OSError as e:
-                    print(f"  >> SKIP copy: {src} → {dst}  ({e})")
-            banner_step("OOD-02", "Hard-negative failures dumped",
-                        count=len(failures_paths), dir=str(failures_dir))
+                    print(f"SKIP copy: {src} -> {dst} ({e})")
+            print(f"Dumped {len(failures_paths)} hard-negative failures to: {failures_dir}")
 
-    banner_phase("Confusion Matrix")
+    print("--- Generating Confusion Matrix ---")
     plt.figure(figsize=(12, 10))
     sns.heatmap(
         cm, annot=True, fmt="d", cmap="Blues",
@@ -296,7 +259,7 @@ def main() -> None:
     plt.tight_layout()
     plt.savefig(cm_path, dpi=120)
     plt.close()
-    banner_step("CM-01", "Confusion matrix saved", path=str(cm_path))
+    print(f"Confusion matrix saved to: {cm_path}")
 
     report = {
         "overall_accuracy": overall_acc,
@@ -313,23 +276,28 @@ def main() -> None:
     }
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
-    banner_step("RPT-01", "Eval report saved", path=str(report_path))
+    print(f"Evaluation report saved to: {report_path}")
 
-    # ---- Gates ---------------------------------------------------------
+    # ---- STEP 7: Quality Assurance / Hard Gates -------------------------
+    # We define minimum performance targets (e.g. min accuracy) that the model
+    # MUST satisfy to pass. If it fails these gates, the script exits with an error.
     target_acc = float(config["target_accuracy"])
     target_recall = float(config.get("notaleaf_min_recall", 0.0))
     max_frr = float(config.get("max_false_reject_rate", 1.0))
 
     failed = []
+    # Check 1: Overall accuracy threshold (e.g. must be >= 90%)
     if overall_acc < target_acc:
         failed.append(
             f"overall_accuracy={overall_acc:.4f} < target={target_acc:.4f}")
     if ood_metrics:
         nr = ood_metrics["notaleaf_recall"]
         frr = ood_metrics["false_reject_rate"]
+        # Check 2: Out-Of-Distribution recall (leaf gate must reject non-leaves)
         if nr < target_recall:
             failed.append(
                 f"notaleaf_recall={nr:.4f} < required={target_recall:.4f}")
+        # Check 3: False rejection rate (should not reject valid tomato leaves)
         if frr > max_frr:
             failed.append(
                 f"false_reject_rate={frr:.4f} > allowed={max_frr:.4f}")

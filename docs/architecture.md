@@ -69,7 +69,7 @@ training_config.yaml  (single source of truth for all hyperparameters)
          │
          ▼
 ┌─────────────────┐
-│  A2             │  prepare_plantvillage.py
+│  A2             │  prepare_plantvillage.py (runs split process, removed for presentation)
 │  Data prep      │  Input:  pre-split dataset OR raw images
 │                 │  Output: ml/dataset/splits/{train,val,test}.csv
 └────────┬────────┘
@@ -118,28 +118,28 @@ The app uses a hand-rolled dependency injection container (`AppContainer`) inste
 of Hilt, keeping the dependency graph explicit and the build fast.
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                     Presentation Layer                           │
-│                                                                  │
-│  HomeScreen   ScanScreen   ResultScreen   HistoryScreen   Settings│
-│      │             │            │              │               │  │
-│  HomeVM     ScanVM        ResultVM       HistoryVM     SettingsVM │
-└──────────────────────────┬──────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Presentation Layer                              │
+│                                                                     │
+│  HomeScreen   ScanScreen   ResultScreen   HistoryScreen   Settings  │
+│      │             │            │              │               │    │
+│  HomeVM     ScanVM        ResultVM       HistoryVM     SettingsVM   │
+└──────────────────────────┬──────────────────────────────────────────┘
                            │  (via AppContainer)
 ┌──────────────────────────▼──────────────────────────────────────┐
-│                    Application Layer                             │
-│                                                                  │
-│  TFLiteEngine          ImagePreprocessor                         │
-│  (classify bitmap)     (resize 224×224, normalize [0,1])         │
+│                    Application Layer                            │
+│                                                                 │
+│  TFLiteEngine          ImagePreprocessor                        │
+│  (classify bitmap)     (resize 224×224, normalize [0,1])        │
 └──────────┬──────────────────────────────────────────────────────┘
            │
 ┌──────────▼──────────────────────────────────────────────────────┐
-│                       Data Layer                                 │
-│                                                                  │
-│  ScanStorageManager     TreatmentRepository    SettingsStore     │
-│  (filesDir/scan_history.json, atomic write)    (DataStore)       │
-│                                                                  │
-│  ScanExporter / ScanImporter  (SAF — no raw storage permission)  │
+│                       Data Layer                                │
+│                                                                 │
+│  ScanStorageManager     TreatmentRepository    SettingsStore    │
+│  (filesDir/scan_history.json, atomic write)    (DataStore)      │
+│                                                                 │
+│  ScanExporter / ScanImporter  (SAF — no raw storage permission) │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

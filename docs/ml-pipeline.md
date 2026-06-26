@@ -38,10 +38,9 @@ already exists it skips processing.
 A2 → Train (×3 stages) → A6.5 → A7 → A8
 ```
 
-Run all stages in order from the **repo root** (not from inside `ml/`):
+Run the stages in order from the **repo root** (not from inside `ml/`):
 
 ```bash
-python -m ml.scripts.prepare_plantvillage
 python -m ml.scripts.train_stage1
 python -m ml.scripts.train_stage2
 python -m ml.scripts.calibrate_temperature
@@ -153,14 +152,13 @@ tflite_max_size_mb: 15        # A8 exits 1 if .tflite exceeds this
 ```yaml
 pre_split_root: "C:/Users/POTATO/Desktop/Code/tomato-care/data/processed"
 # Set to null for fallback multi-root mode.
-# Docker users: set to /app/ml/dataset/processed (see docker.md)
 ```
 
 ---
 
 ## Stage A2 — Data preparation
 
-**Script:** `ml/scripts/prepare_plantvillage.py`
+**Script:** *Historically `ml/scripts/prepare_plantvillage.py` (removed for presentation cleanup)*
 **Output:** `ml/dataset/splits/train.csv`, `val.csv`, `test.csv`
 **Cached by:** existence of all three CSV files
 
@@ -229,8 +227,8 @@ A separate lighting-only augmentation (brightness/contrast variation) was also
 tested: it maintained lab accuracy (~97.9%) but reduced field accuracy by 3.8
 percentage points (77.2% → 73.4%). Also rejected for the deployed model.
 
-> **Note:** the `augment_uae.py` script still exists in `ml/scripts/` as a
-> historical artifact. It is NOT part of the deployed training pipeline.
+> **Note:** the `augment_uae.py` script was originally saved in `ml/scripts/` but 
+> has been removed for presentation cleanup. It is NOT part of the deployed training pipeline.
 
 ---
 
@@ -306,7 +304,7 @@ calibration quality.
 
 ## Stage A7 — Evaluation
 
-**Script:** `ml/scripts/eval_model.py` (pipeline); `ml/tree/eval_deployed_tflite.py` (deployed cascade)
+**Script:** `ml/scripts/step4_eval_model.py` (pipeline); `ml/experiments/tree/step6_eval_deployed_tflite.py` (deployed cascade)
 **Input:** 3 TFLite models + held-out test set (n=6,683)
 **Output:** `ml/ml/reports/eval_deployed.json`, `ml/reports/confusion_matrix_deployed.png`
 
