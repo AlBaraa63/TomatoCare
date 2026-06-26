@@ -5,7 +5,7 @@ It covers every stage from raw images to the production-ready 3-stage TFLite
 cascade.
 
 > **Updated 2026-05-28** to reflect the **deployed cascade** architecture.
-> Metrics are sourced from `reports/eval_deployed.json` (single source of truth).
+> Metrics are sourced from `ml/reports/eval_deployed.json` (single source of truth).
 
 ---
 
@@ -67,7 +67,7 @@ where each stage is a separate MobileNetV3 model:
 a `not_tomato` reject class. This failed: non-tomato inputs were silently
 labeled as diseases with high confidence. The cascade solves this — each gate
 has a dedicated rejection objective, and hard-rejects before the disease
-classifier ever runs. See the master report (`reports/FINAL_REPORT_REVISED.md`,
+classifier ever runs. See the master report (`presentation_prep/reports/FINAL_REPORT_REVISED.md`,
 §1.4 and §3.8.3) for the full evolution story.
 
 **Gate safety metrics:**
@@ -210,7 +210,7 @@ Split sizes: **train 25,100 / val 3,988 / test 3,565** (stratified, seed=42).
 
 The **deployed** cascade uses horizontal-flip-only augmentation. This is the
 `ctrl` (control) configuration that produced the authoritative evaluation
-numbers in `reports/eval_deployed.json`.
+numbers in `ml/reports/eval_deployed.json`.
 
 ### Experimental: heavy field-simulation augmentation (REJECTED)
 
@@ -308,7 +308,7 @@ calibration quality.
 
 **Script:** `ml/scripts/eval_model.py` (pipeline); `ml/tree/eval_deployed_tflite.py` (deployed cascade)
 **Input:** 3 TFLite models + held-out test set (n=6,683)
-**Output:** `ml/reports/eval_deployed.json`, `ml/reports/confusion_matrix_deployed.png`
+**Output:** `ml/ml/reports/eval_deployed.json`, `ml/reports/confusion_matrix_deployed.png`
 
 ### Metrics computed
 
@@ -429,7 +429,7 @@ Output: (11,) float32 — probability distribution over 11 classes (10 diseases 
 
 The **deployed** disease classifier (Stage 3) has **11 classes** — 10 tomato
 diseases + healthy. Class indices are alphabetical (the order TF Keras assigns
-via `image_dataset_from_directory`). This matches `reports/eval_deployed.json`.
+via `image_dataset_from_directory`). This matches `ml/reports/eval_deployed.json`.
 
 | Index | Class name | Note |
 |---|---|---|
@@ -453,7 +453,7 @@ via `image_dataset_from_directory`). This matches `reports/eval_deployed.json`.
 
 ## Results summary
 
-All numbers sourced from `reports/eval_deployed.json` — the single source of truth.
+All numbers sourced from `ml/reports/eval_deployed.json` — the single source of truth.
 
 | Metric | Value |
 |---|---|
@@ -513,14 +513,14 @@ will also need their artifacts deleted if their inputs have changed.
 
 ```bash
 # Re-run only evaluation (useful for checking a new model without retraining)
-rm ml/reports/eval_deployed.json
+rm ml/ml/reports/eval_deployed.json
 python -m ml.scripts.eval_model
 
 # Re-run training from scratch (disease classifier)
 rm ml/models/checkpoints/stage1_best.keras
 rm ml/models/checkpoints/stage2_best.keras
 rm ml/models/checkpoints/stage2_calibrated.keras
-rm ml/reports/eval_deployed.json
+rm ml/ml/reports/eval_deployed.json
 python -m ml.scripts.train_stage1
 python -m ml.scripts.train_stage2
 python -m ml.scripts.calibrate_temperature

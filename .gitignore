@@ -48,7 +48,12 @@ android/.cxx/
 
 # Document & Report Files (local/personal reference)
 *.docx
+*.pdf
+*.pptx
 report.txt
+presentation_prep/
+CLAUDE.md
+CHANGELOG.md
 
 # OS
 .DS_Store

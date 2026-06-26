@@ -342,7 +342,7 @@ Events emitted to show Snackbar feedback: `ExportFinished`, `ImportFinished`,
 
 > **This is the app's strategic feature.** The ML evaluation measures a lab→field
 > accuracy gap (97.19% lab end-to-end vs 77.2% field on PlantDoc, per
-> `reports/eval_deployed.json`). The report's plan to close that gap is a
+> `ml/reports/eval_deployed.json`). The report's plan to close that gap is a
 > **real-world data flywheel**: collect genuine field images with verified
 > labels, then retrain. That flywheel is **implemented in the app**, fully
 > offline — nothing is uploaded; the user owns and exports the data.
@@ -497,7 +497,7 @@ val CLASS_NAMES: List<String> = listOf(
 
 This list is the **contract** between the ML pipeline and the Android app:
 index 0 in the Stage 3 output tensor must map to `bacterial_spot`, and so on.
-The order is alphabetical — matching `reports/eval_deployed.json`.
+The order is alphabetical — matching `ml/reports/eval_deployed.json`.
 `ClassNamesTest` verifies this at build time.
 
 ---

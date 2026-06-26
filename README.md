@@ -188,7 +188,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor setup.
 
 | Document | Audience | What it covers |
 |---|---|---|
-| [reports/](reports/) | Everyone / Examiner | **Capstone report** (`FINAL_REPORT_REVISED.md`) + audit/viva pack, email log, reconciliation changelog, and project-journey provenance. Start at `reports/README.md`. |
 | [docs/getting-started.md](docs/getting-started.md) | Everyone | Prerequisites, clone, first build for both tracks |
 | [docs/architecture.md](docs/architecture.md) | Everyone | System design, data flow, component diagram, key decisions |
 | [docs/ml-pipeline.md](docs/ml-pipeline.md) | ML / QA | Stages A2–A8, config reference, training, evaluation, export |

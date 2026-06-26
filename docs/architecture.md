@@ -93,7 +93,7 @@ training_config.yaml  (single source of truth for all hyperparameters)
 ┌─────────────────┐
 │  A7             │  eval_deployed_tflite.py
 │  Evaluation     │  Input:  3 TFLite models + test set (n=6,683)
-│                 │  Output: reports/eval_deployed.json
+│                 │  Output: ml/reports/eval_deployed.json
 │  Gate: ≥ 90%   │          11×11 confusion matrix
 └────────┬────────┘  Disease acc: 97.59%  |  E2E: 97.19%
          │
